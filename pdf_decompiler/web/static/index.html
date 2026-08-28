@@ -144,6 +144,22 @@
       <div class="viewer-bar">
         <strong id="viewer-title"></strong>
         <span id="viewer-meta" class="muted small"></span>
+        <span id="viewer-modes" class="mode-toggle hidden">
+          <button
+            class="button small"
+            data-viewer-mode="stored"
+            title="The image's own pixels — what a download contains"
+          >
+            Stored image
+          </button>
+          <button
+            class="button small"
+            data-viewer-mode="page"
+            title="This region of the page, with text and graphics drawn over the image"
+          >
+            As on page
+          </button>
+        </span>
         <span class="viewer-controls">
           <button class="button small" data-viewer="out" title="Zoom out (−)">&minus;</button>
           <span id="viewer-zoom" class="muted small"></span>

@@ -20,6 +20,8 @@ from ..core import (
     image_preview_png,
     open_document,
     page_content_stream_bytes,
+    page_drawings,
+    page_operators,
     render_page_png,
 )
 
@@ -89,6 +91,26 @@ def task_object_stream(path: str, xref: int, password: str | None, raw: bool) ->
         return doc.xref_stream_raw(xref) if raw else doc.xref_stream(xref)
     finally:
         doc.close()
+
+
+def task_page_drawings(
+    path: str,
+    page_number: int,
+    offset: int,
+    limit: int,
+    password: str | None,
+) -> dict[str, Any]:
+    return page_drawings(path, page_number, offset=offset, limit=limit, password=password)
+
+
+def task_page_operators(
+    path: str,
+    page_number: int,
+    offset: int,
+    limit: int,
+    password: str | None,
+) -> dict[str, Any]:
+    return page_operators(path, page_number, offset=offset, limit=limit, password=password)
 
 
 def task_content_stream(path: str, page_number: int, password: str | None, raw: bool) -> bytes:

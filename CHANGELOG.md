@@ -34,6 +34,18 @@ from the application: see [docs/schema.md](docs/schema.md#versioning).
   an element hidden beneath another can be selected.
 - The details panel lists every image on the page as a pickable strip when there
   is more than one.
+- `GET /api/documents/{id}/pages/{n}/drawings?offset=&limit=` and
+  `.../operators?offset=&limit=` read any window of a page's vector paths or
+  operator listing, with the real totals. Backed by
+  `pdf_decompiler.core.page_drawings` and `page_operators`.
+- `drawings_info` in the page report states the page's real path count and what the
+  inlined window covers; `analyze_page(drawing_limit=…)` controls that window.
+- The Drawings tab and the operator listing page through those windows, showing
+  *Showing a–b of n* with first / previous / next.
+- Image previews can be shown two ways: **Stored image** (the image's own pixels)
+  or **As on page** (that region of the page, with the text and vector graphics
+  the page draws over the image). The choice applies to the details panel, the
+  Images tab and the viewer.
 - Image viewer: clicking any thumbnail opens a scalable preview with zoom in/out,
   fit, 1:1, `Ctrl`/`Cmd` + wheel, keyboard shortcuts, download and copy. Zooming
   in fetches a larger raster instead of stretching the thumbnail, and turns off
@@ -41,6 +53,14 @@ from the application: see [docs/schema.md](docs/schema.md#versioning).
 
 ### Fixed
 
+- A page report for a CAD sheet could reach **746 MB** of JSON, because every
+  vector path was inlined — 265 507 of them on one page. Such a report was served
+  to the browser and written to the page cache. Reports are now windowed: the same
+  page is 8 MB, and the paths beyond the window are reachable through the new
+  endpoint.
+- The operator listing silently stopped at 20 000 operators with no way to see
+  further, and no way to learn how many there were. On the same sheet that meant
+  20 000 of 5 071 999 operators, 0.4 % of the page.
 - Image thumbnails were blank for documents whose images are in a format
   browsers cannot display — JPEG 2000 scans in particular. Thumbnails and
   **Copy image** now use the PNG preview endpoint, **Download** still returns the

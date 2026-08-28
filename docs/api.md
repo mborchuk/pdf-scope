@@ -17,6 +17,8 @@ generated from the code is served at `/docs`, the OpenAPI schema at
   - [GET /api/documents/{document_id}/pages/{page_number}](#get-apidocumentsdocument_idpagespage_number)
   - [GET .../pages/{page_number}/report.json](#get-pagespage_numberreportjson)
   - [GET .../pages/{page_number}/render.png](#get-pagespage_numberrenderpng)
+  - [GET .../pages/{page_number}/drawings](#get-pagespage_numberdrawings)
+  - [GET .../pages/{page_number}/operators](#get-pagespage_numberoperators)
   - [GET .../pages/{page_number}/text](#get-pagespage_numbertext)
   - [GET .../pages/{page_number}/content-stream](#get-pagespage_numbercontent-stream)
 - [Objects](#objects)
@@ -271,6 +273,49 @@ curl -s -o detail.png \
 
 With `clip`, `X-Render-Info` additionally carries `clip` (the rectangle actually
 used) and `page_point_size`.
+
+### GET .../pages/{page_number}/drawings
+
+A window of the page's vector paths, with the page's real total. The page report
+inlines only the first 5 000 paths, because CAD sheets carry far more — 265 507 on
+one sheet in testing, which is 746 MB of JSON if inlined.
+
+| Query | Type | Default | Range |
+| --- | --- | --- | --- |
+| `offset` | int | `0` | ≥ 0. Beyond the last path returns an empty `items` |
+| `limit` | int | `5000` | 1–5000 |
+
+```json
+{"items": [{"index": 264000, "type": "s", "rect": [...], "items": [...]}],
+ "total": 265507, "offset": 264000, "limit": 50, "truncated": true,
+ "page_number": 0}
+```
+
+`index` is the path's position on the page, not in the window, so it stays stable
+however the page is walked. Same field shapes as
+[`drawings`](schema.md#drawings) in the page report.
+
+### GET .../pages/{page_number}/operators
+
+A window of the decompiled operator listing, with the **exact** total. The whole
+stream is lexed to count operators — one sheet in testing held 5 071 999 — but only
+the window is materialised, so memory stays flat. Expect seconds, not
+milliseconds, on such a page.
+
+| Query | Type | Default | Range |
+| --- | --- | --- | --- |
+| `offset` | int | `0` | ≥ 0 |
+| `limit` | int | `2000` | 1–20000 |
+
+```json
+{"operators": [{"index": 5000000, "op": "l", "offset": 53526090, "operands": [...]}],
+ "operator_counts": {"l": 2987200, "m": 364361, "q": 358078},
+ "total": 5071999, "offset": 5000000, "limit": 20, "returned": 20,
+ "truncated": true, "bytes_parsed": 61093208, "bytes_total": 61093208,
+ "page_number": 0}
+```
+
+`operator_counts` always covers the whole stream, not just the window.
 
 ### GET .../pages/{page_number}/text
 

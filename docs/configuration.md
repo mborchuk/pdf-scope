@@ -61,9 +61,11 @@ something different.
 | --- | --- | --- |
 | Open documents | 25 | `web.registry.MAX_OPEN_DOCUMENTS` |
 | Objects scanned for the type histogram | 200 000 | `core.schema.XREF_SCAN_LIMIT` |
+| Vector paths inlined per page report | 5 000 | `core.schema.PAGE_DRAWING_LIMIT` |
+| Operators inlined per page report | 5 000 | `core.schema.PAGE_OPERATOR_LIMIT` |
 | Nodes per structure/name-tree walk | 5 000 | `core.objects.DEFAULT_NODE_LIMIT` |
 | Inlined decoded content stream | 200 000 chars | `core.schema.CONTENT_STREAM_INLINE_LIMIT` |
-| Operators listed per page | 20 000 | `core.schema.CONTENT_STREAM_OPERATOR_LIMIT` |
+| Operators per window request | 20 000 | `core.schema.CONTENT_STREAM_OPERATOR_LIMIT` |
 | Pages scanned for the font list | 2 000 | `core.document.FONT_SCAN_PAGE_LIMIT` |
 | Render resolution | 24–400 dpi | `core.render.MAX_DPI` |
 

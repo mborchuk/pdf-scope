@@ -44,6 +44,8 @@ Re-exported from `pdf_decompiler.core`:
 | `open_document` | function | Open and authenticate a file |
 | `describe_object` | function | Describe one indirect object |
 | `page_content_stream_bytes` | function | Whole content stream of a page |
+| `page_drawings` | function | A window of a page's vector paths, with the total |
+| `page_operators` | function | A window of the operator listing, with the exact total |
 | `render_page_png` | function | Render a page to PNG |
 | `image_preview_png` | function | Decode one image XObject and re-encode it as PNG |
 | `build_document_bundle` | function | Complete extraction as a zip |
@@ -270,6 +272,35 @@ x0, y0, x1, y1 = span["bbox"]
 box_px = ((x0 - rect[0]) * zoom, (y0 - rect[1]) * zoom,
           (x1 - rect[0]) * zoom, (y1 - rect[1]) * zoom)
 ```
+
+## Windowed lists
+
+```python
+page_drawings(path, page_number, *, offset=0, limit=5000, password=None) -> dict
+page_operators(path, page_number, *, offset=0, limit=20000, password=None) -> dict
+```
+
+A page report inlines only the first `PAGE_DRAWING_LIMIT` paths and
+`PAGE_OPERATOR_LIMIT` operators — a CAD sheet can hold 265 507 paths and 5 071 999
+operators, which is hundreds of megabytes of JSON. These accessors read any window
+of either list.
+
+`page_drawings` returns `{items, total, offset, limit, truncated, page_number}`;
+`page_operators` returns the parse result plus `total`, `returned`, `offset` and
+`limit`. In both, each entry's `index` is its position on the page, and
+`operator_counts` covers the whole stream regardless of the window. Pass
+`limit=None` for everything, which is what a script wanting the full set should do.
+
+```python
+window = page_drawings("site-plan.pdf", 0, offset=0, limit=None)
+print(window["total"], "paths")
+
+ops = page_operators("site-plan.pdf", 0, limit=2000)
+print(ops["total"], "operators;", ops["operator_counts"]["l"], "line segments")
+```
+
+`analyze_page(..., drawing_limit=None)` inlines every path in the report instead of
+a window, if a caller genuinely wants one big object.
 
 ```python
 image_preview_png(

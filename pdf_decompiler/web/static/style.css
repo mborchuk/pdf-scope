@@ -195,6 +195,8 @@ dialog.viewer[open] { display: flex; flex-direction: column; }
   padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--bg-soft);
 }
 .viewer-controls { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+/* Stored pixels vs the composited page region. */
+.mode-toggle { display: inline-flex; gap: 4px; margin: 4px 0; }
 #viewer-zoom { min-width: 46px; text-align: center; }
 .viewer-body { flex: 1; min-height: 0; overflow: auto; background: #0d0f14; padding: 12px; }
 .viewer-body img { display: block; margin: 0 auto; background: #fff; image-rendering: auto; }
@@ -224,6 +226,9 @@ dialog.viewer[open] { display: flex; flex-direction: column; }
 }
 .box-picker button:hover { background: var(--accent-soft); }
 .box-picker .kind { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .05em; }
+
+/* Paging controls for lists too long to inline (vector paths, operators). */
+.window-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 
 .notice { border-left: 3px solid var(--warn); padding: 6px 10px; margin: 8px 0; color: var(--muted); background: var(--bg-panel); }
 .error-text { color: var(--err); }

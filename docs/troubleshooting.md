@@ -143,6 +143,31 @@ Raster resolution is `dpi = 96 × zoom`, capped at 400. Beyond that the bitmap
 is upscaled by the browser. The cap keeps memory bounded — a 400 dpi A4 page is
 already ~3300 × 4700 pixels.
 
+**The drawings list or the operator listing stops before the end**
+Both are read in windows. A CAD sheet can hold hundreds of thousands of paths and
+millions of operators, so a page report inlines the first 5 000 of each and the tab
+shows *Showing a–b of n* with **first / previous / next**. Nothing is unreachable:
+`GET .../pages/{n}/drawings?offset=&limit=` and `.../operators?offset=&limit=` walk
+the whole page, and the page-report download contains the complete set. The
+operator total appears only after the first window is fetched, because counting
+requires lexing the whole stream.
+
+**A CAD page takes ten seconds or more to open**
+That is the extraction, not the UI. The heaviest sheet tested — 265 507 vector
+paths — needs about 11 s for its page report and about 16 s to count its 5 071 999
+operators. Both are cached afterwards (the page report on disk, the operator window
+in the tab). The page render itself is fast, so scrolling stays responsive while the
+report is still being built.
+
+**The preview does not show what I can see on the page**
+Images are only one layer. Text and vector graphics are drawn over them, so an
+image's own pixels often lack what the page shows: a map image typically has no
+place names, because the names are page text on top of it. Switch the preview to
+**As on page** to see the composited region, and back to **Stored image** for the
+bytes themselves. If the thing you are looking for appears in neither, it is not
+an image at all — turn on the *Drawings* overlay, or open the *Drawings* and
+*Text* tabs. Road signs, arrows, frames and logos are frequently vector paths.
+
 **The page clearly holds two images on top of each other, but only one can be selected**
 Clicking the page can only reach the topmost box. When boxes are stacked a
 chooser lists every element under the pointer — pick the one you want. The

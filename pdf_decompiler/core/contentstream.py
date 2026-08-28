@@ -294,11 +294,22 @@ def _collect_inline_image(lexer: _Lexer, operands: list[Any]) -> dict[str, Any]:
     return {"dictionary": info, "data_bytes": max(0, data_end - start)}
 
 
-def parse_content_stream(data: bytes, *, operator_limit: int | None = None) -> dict[str, Any]:
+def parse_content_stream(
+    data: bytes,
+    *,
+    operator_limit: int | None = None,
+    operator_offset: int = 0,
+    count_all: bool = False,
+) -> dict[str, Any]:
     """Parse a decoded content stream into an ordered operator listing.
 
     Returns a dict with ``operators`` (each ``{"op", "operands", "offset",
     "description"}``), a ``truncated`` flag and simple ``operator_counts``.
+
+    ``operator_offset`` skips that many operators before collecting, so a caller
+    can walk a long stream in windows. ``count_all`` keeps lexing after the limit
+    is reached to report ``total`` — it costs the rest of the parse but no extra
+    memory, because the skipped operators are counted and dropped.
     """
     lexer = _Lexer(data)
     operators: list[dict[str, Any]] = []
@@ -306,6 +317,8 @@ def parse_content_stream(data: bytes, *, operator_limit: int | None = None) -> d
     operands: list[Any] = []
     stack: list[list[Any]] = []
     truncated = False
+    seen = 0
+    start = max(0, int(operator_offset))
 
     while True:
         item = lexer.next_object()
@@ -323,30 +336,46 @@ def parse_content_stream(data: bytes, *, operator_limit: int | None = None) -> d
                 (stack[-1] if stack else operands).append(wrapper)
             continue
         if isinstance(value, str):  # operator keyword
-            entry: dict[str, Any] = {
-                "op": value,
-                "offset": offset,
-                "operands": list(operands),
-            }
-            if value == "BI":
-                entry["inline_image"] = _collect_inline_image(lexer, operands)
-            description = OPERATOR_DESCRIPTIONS.get(value)
-            if description:
-                entry["description"] = description
-            operators.append(entry)
+            position = seen
+            seen += 1
             counts[value] = counts.get(value, 0) + 1
+            inline_image = _collect_inline_image(lexer, operands) if value == "BI" else None
+            collecting = position >= start and (
+                operator_limit is None or len(operators) < operator_limit
+            )
+            if collecting:
+                entry: dict[str, Any] = {
+                    "op": value,
+                    "offset": offset,
+                    "index": position,
+                    "operands": list(operands),
+                }
+                if inline_image is not None:
+                    entry["inline_image"] = inline_image
+                description = OPERATOR_DESCRIPTIONS.get(value)
+                if description:
+                    entry["description"] = description
+                operators.append(entry)
             operands = []
             stack = []
-            if operator_limit is not None and len(operators) >= operator_limit:
+            reached_limit = operator_limit is not None and len(operators) >= operator_limit
+            if reached_limit and not count_all:
                 truncated = lexer.pos < len(data)
                 break
             continue
         (stack[-1] if stack else operands).append(value)
 
+    if count_all:
+        # The whole stream was walked, so the count is exact and nothing is left.
+        truncated = start + len(operators) < seen
     return {
         "operators": operators,
         "operator_counts": dict(sorted(counts.items(), key=lambda kv: -kv[1])),
         "truncated": truncated,
+        "offset": start,
+        "limit": operator_limit,
+        "returned": len(operators),
+        "total": seen if count_all else None,
         "bytes_parsed": lexer.pos,
         "bytes_total": len(data),
     }

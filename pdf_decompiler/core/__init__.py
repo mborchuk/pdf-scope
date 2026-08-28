@@ -21,7 +21,7 @@ from .errors import (
 from .export import build_document_bundle, collect_document_json, document_text
 from .images import image_preview_png
 from .objects import describe_object
-from .page import analyze_page, page_content_stream_bytes
+from .page import analyze_page, page_content_stream_bytes, page_drawings, page_operators
 from .render import render_page_png
 from .schema import SCHEMA_VERSION, dumps
 
@@ -43,6 +43,8 @@ __all__ = [
     "image_preview_png",
     "open_document",
     "page_content_stream_bytes",
+    "page_drawings",
+    "page_operators",
     "render_page_png",
     "sha256_of_file",
 ]

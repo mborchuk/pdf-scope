@@ -188,6 +188,23 @@ panel also shows **Images on this page**: a strip of small previews, current one
 highlighted. Clicking one selects that image, which is the reliable way to reach
 an image hidden underneath another.
 
+### Stored image vs as on page
+
+A page is a composition. Text and vector graphics are drawn *over* images, so an
+image's own pixels are often not what you see on the page — a map image can carry
+no place names at all, because the names are page text painted on top of it.
+
+Image previews therefore have two views, switched with the buttons above the
+preview and repeated in the viewer's toolbar:
+
+| View | Shows | Download gives |
+| --- | --- | --- |
+| **Stored image** (default) | Only the image's own pixels, as a PNG re-encode — exactly the content of the stored bytes | The original bytes, in the PDF's own format |
+| **As on page** | That rectangle of the page, composited: the image plus every text and vector element drawn over it | That render, as PNG |
+
+The choice applies to the details panel, the *Images* tab and the viewer, and it
+stays until changed. Images with no bytes of their own only have the second view.
+
 ### Image viewer
 
 Clicking any thumbnail — in the details panel or the Images tab — opens a viewer
@@ -198,6 +215,7 @@ that scales the image freely.
 | `−` / `+`, or `Ctrl`/`Cmd` + wheel | Zoom out / in in 25 % steps |
 | **Fit**, or `0` | Whole image in the window, never enlarged past 100 % |
 | **1:1**, or `1` | One image pixel per screen pixel |
+| **Stored image** / **As on page** | Switch between the image's own pixels and the composited page region (shown only when both are possible) |
 | **Download** | Original bytes for a stored image; the region PNG for a rendered one |
 | **Copy** | The image on the clipboard as PNG |
 | **Close**, or `Esc` | Back to the page |
@@ -315,6 +333,14 @@ One row per vector path: index, type (fill / stroke / fill and stroke / clip),
 bounding rect, stroke and fill colours, line width, dash pattern and the number
 of path items, with **Copy** for the full path JSON including every coordinate.
 
+**Long pages are read in windows.** CAD sheets routinely hold tens of thousands of
+paths — 265 507 on one sheet in testing — so the heading states the real total and
+a bar above the table shows which window is on screen
+(*Showing 5 001–7 000 of 265 507*) with **first**, **previous** and **next**. The
+index column is the path's position on the page, so it does not shift between
+windows. Windows are 5 000 paths from the page report and 2 000 per fetch after
+that; the whole set is in the page-report download.
+
 ## Annotations tab
 
 Two tables: annotations (index, type, rect, xref, contents, author, flags) and
@@ -346,6 +372,14 @@ The decompiled view of the current page:
 Buttons: **Copy decoded stream**, **Download decoded**, **Download raw**,
 **Copy operators JSON**. When the inline copy is truncated the UI says so and
 points at the download.
+
+**Operator count and windows.** The page report carries the first 5 000 operators
+and does not count the rest, because counting means lexing the whole stream. Until
+a window is fetched the tab says *"5 000 shown — this stream holds more; page a
+window to count them all"*; pressing **next** fetches a window and then the exact
+total is known and displayed (*5 071 999 in total* on the heaviest sheet tested).
+Counting a stream that long takes some seconds, so the fetch shows a toast while it
+runs. The index column is the operator's position in the stream.
 
 ## Not extractable tab
 

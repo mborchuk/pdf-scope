@@ -233,10 +233,33 @@ function storedImageFormat(page, placement) {
 
 /* One thumbnail. Clicking it opens the scalable viewer, which needs to know
    where to get bigger pixels from, hence the data attributes. */
+/* Which pixels an image preview shows.
+ *
+ * A page is a composition: text and vector graphics are painted over images. A
+ * map image, for example, can carry no place names at all because the names are
+ * page text drawn on top of it. Showing only the stored bytes is correct but
+ * surprising, so both views are offered:
+ *   "stored" — the image's own pixels, i.e. exactly what a download contains;
+ *   "page"   — that rectangle of the page, composited as the reader sees it.
+ * Images with no bytes of their own can only ever be shown the second way. */
+let imageViewMode = "stored";
+
+/* Does this placement have its own bytes, so that both views are possible? */
+const hasOwnPixels = (placement) => ["stored", "file"].includes(previewSource(placement));
+
+function effectivePreviewUrl(placement, pageIndex, maxSide) {
+  if (imageViewMode === "page" && Array.isArray(placement.bbox) && placement.bbox.length === 4) {
+    return regionPreviewUrl(placement, pageIndex, maxSide);
+  }
+  return placementPreviewUrl(placement, pageIndex, maxSide);
+}
+
+/* One thumbnail. Clicking it opens the scalable viewer, which needs to know
+   where to get bigger pixels from, hence the data attributes. */
 function thumbHtml(placement, page, alt, maxSide) {
   const pageIndex = page ? page.page_number : 0;
   const source = previewSource(placement);
-  const url = placementPreviewUrl(placement, pageIndex, maxSide);
+  const url = effectivePreviewUrl(placement, pageIndex, maxSide);
   if (!url) {
     return `<p class="notice small">No pixels available for this image: it has no xref and no
       position on the page, so neither its bytes nor a region render can be produced.</p>`;
@@ -245,6 +268,7 @@ function thumbHtml(placement, page, alt, maxSide) {
     data-fallback="${source === "file" ? "stored" : "preview"}"
     data-viewer="open"
     data-source="${source}"
+    data-mode="${hasOwnPixels(placement) ? imageViewMode : "page"}"
     data-label="${escapeHtml(PLACEMENT_LABEL(placement))}"
     data-page="${pageIndex}"
     data-xref="${placement.xref || ""}"
@@ -252,6 +276,28 @@ function thumbHtml(placement, page, alt, maxSide) {
     data-bbox="${(placement.bbox || []).join(",")}"
     data-pixels="${placement.width || ""}x${placement.height || ""}" />`;
 }
+
+/* Switch between the two views. Only shown when both are possible. */
+function imageModeToggleHtml(placement) {
+  const canRegion = Array.isArray(placement.bbox) && placement.bbox.length === 4;
+  if (!hasOwnPixels(placement) || !canRegion) return "";
+  const button = (mode, label, title) =>
+    `<button class="button small${imageViewMode === mode ? " primary" : ""}"
+      data-image-mode="${mode}" title="${escapeHtml(title)}">${label}</button>`;
+  return `<span class="mode-toggle">
+    ${button("stored", "Stored image", "The image's own pixels — what a download contains")}
+    ${button("page", "As on page", "This region of the page, with text and graphics drawn over the image")}
+  </span>`;
+}
+
+const IMAGE_MODE_NOTE = {
+  stored: `Showing the image's own pixels. Anything the page draws over it — text
+    labels, vector graphics — is not part of the image; switch to <em>As on page</em>
+    to see the composited result.`,
+  page: `Showing this region of the page, so text and vector graphics drawn over
+    the image are included. Switch to <em>Stored image</em> for the image's own
+    pixels.`,
+};
 
 /* Every image on the page as a pickable strip. Overlapping images (a scan under
    a stamp, two revisions of a drawing on top of each other) cannot all be
@@ -261,7 +307,7 @@ function imageChoicesHtml(page, current) {
   if (placements.length < 2) return "";
   const items = placements
     .map((placement, index) => {
-      const url = placementPreviewUrl(placement, page.page_number, 120);
+      const url = effectivePreviewUrl(placement, page.page_number, 120);
       const selected = placement === current ? " current" : "";
       const label = placement.xref ? `xref ${placement.xref}` : `inline ${index}`;
       return `<div class="image-choice${selected}" data-choice="${index}" title="${escapeHtml(
@@ -313,7 +359,9 @@ const viewer = {
   raster: 0, // longest side of the raster currently loaded
 };
 
-/* Build a viewer target from the data attributes of a thumbnail. */
+/* Build a viewer target from the data attributes of a thumbnail. The target can
+   show either the stored pixels or the page region, whichever the thumbnail was
+   showing, and can switch between them while open. */
 function viewerTargetFromThumb(image) {
   const xref = image.dataset.xref ? Number(image.dataset.xref) : null;
   const file = image.dataset.file || null;
@@ -323,33 +371,39 @@ function viewerTargetFromThumb(image) {
     .filter((part) => part !== "")
     .map(Number);
   const [width, height] = (image.dataset.pixels || "").split("x").map(Number);
-  const source = image.dataset.source;
   const placement = { xref, file, bbox, index: 0 };
+  const canStored = previewSource(placement) !== "region" && (xref || file);
+  const canPage = bbox.length === 4;
 
   return {
     label: image.dataset.label || "Image",
     pixels: [width || 0, height || 0],
-    source,
-    urlFor: (maxSide) =>
-      source === "region"
+    mode: image.dataset.mode === "page" || !canStored ? "page" : "stored",
+    modes: { stored: Boolean(canStored), page: canPage },
+    get source() {
+      return this.mode === "page" ? "region" : "stored";
+    },
+    urlFor(maxSide) {
+      return this.mode === "page"
         ? regionPreviewUrl(placement, pageIndex, maxSide)
-        : placementPreviewUrl(placement, pageIndex, maxSide),
-    downloadUrl:
-      source === "region"
-        ? regionPreviewUrl(placement, pageIndex, VIEWER_MAX_RASTER)
-        : file
-          ? storedImageUrl(file)
-          : imagePreviewUrl(xref, VIEWER_MAX_RASTER),
-    copyUrl:
-      source === "region"
-        ? regionPreviewUrl(placement, pageIndex, VIEWER_MAX_RASTER)
-        : xref
-          ? imagePreviewUrl(xref)
-          : storedImageUrl(file),
-    note:
-      source === "region"
-        ? "These pixels are a render of this region of the page: the image itself has no extractable bytes, so there is nothing to download in its original format."
-        : "Preview is a PNG re-encode of the stored image. Download gives the original bytes, in the format the PDF used.",
+        : placementPreviewUrl(placement, pageIndex, maxSide);
+    },
+    get downloadUrl() {
+      if (this.mode === "page") return regionPreviewUrl(placement, pageIndex, VIEWER_MAX_RASTER);
+      return file ? storedImageUrl(file) : imagePreviewUrl(xref, VIEWER_MAX_RASTER);
+    },
+    get copyUrl() {
+      if (this.mode === "page") return regionPreviewUrl(placement, pageIndex, VIEWER_MAX_RASTER);
+      return xref ? imagePreviewUrl(xref) : storedImageUrl(file);
+    },
+    get note() {
+      if (this.mode === "page") {
+        return this.modes.stored
+          ? "Showing this region of the page: text and vector graphics drawn over the image are included. Download gives this render as PNG."
+          : "These pixels are a render of this region of the page: the image itself has no extractable bytes, so there is nothing to download in its original format.";
+      }
+      return "Showing the image's own pixels, as a PNG re-encode. Anything the page draws over the image is not part of it. Download gives the original bytes, in the format the PDF used.";
+    },
   };
 }
 
@@ -358,12 +412,34 @@ function openImageViewer(target) {
   viewer.zoom = null;
   viewer.raster = 0;
   el("viewer-title").textContent = target.label;
-  el("viewer-meta").textContent = target.pixels[0]
-    ? `${target.pixels[0]} × ${target.pixels[1]} px source`
-    : "";
-  el("viewer-note").textContent = target.note;
+  syncViewerChrome();
   const dialog = el("image-viewer");
   if (!dialog.open) dialog.showModal();
+  applyViewerZoom();
+}
+
+/* Labels, note and the mode buttons, which only appear when both views exist. */
+function syncViewerChrome() {
+  const target = viewer.target;
+  el("viewer-meta").textContent = target.pixels[0]
+    ? `${target.pixels[0]} × ${target.pixels[1]} px image`
+    : "";
+  el("viewer-note").textContent = target.note;
+  const both = target.modes.stored && target.modes.page;
+  el("viewer-modes").classList.toggle("hidden", !both);
+  el("viewer-modes")
+    .querySelectorAll("[data-viewer-mode]")
+    .forEach((button) => {
+      button.classList.toggle("primary", button.dataset.viewerMode === target.mode);
+    });
+}
+
+function setViewerMode(mode) {
+  const target = viewer.target;
+  if (!target || target.mode === mode || !target.modes[mode]) return;
+  target.mode = mode;
+  viewer.raster = 0;
+  syncViewerChrome();
   applyViewerZoom();
 }
 
@@ -421,6 +497,11 @@ function stepViewerZoom(factor) {
 }
 
 el("image-viewer").addEventListener("click", (event) => {
+  const modeButton = event.target.closest("[data-viewer-mode]");
+  if (modeButton) {
+    setViewerMode(modeButton.dataset.viewerMode);
+    return;
+  }
   const action = event.target.dataset.viewer;
   if (!action || !viewer.target) return;
   if (action === "in") stepViewerZoom(1.25);
@@ -507,6 +588,8 @@ async function loadDocumentReport(documentId) {
     pageIndex: 0,
     pages: new Map(),
     elementsByPage: new Map(),
+    drawingsWindow: null,
+    operatorsWindow: null,
     scrollTop: 0,
     zoom: 1,
     tab: "page",
@@ -989,6 +1072,11 @@ function setCurrentPage(doc, index, options = {}) {
   const next = Math.min(Math.max(0, index), total - 1);
   const changed = next !== doc.pageIndex;
   doc.pageIndex = next;
+  if (changed) {
+    /* Windowed lists belong to a page. */
+    doc.drawingsWindow = null;
+    doc.operatorsWindow = null;
+  }
   syncPageToolbar(doc);
   markCurrentSlot(doc);
   if (options.scroll) scrollToPage(doc, next, options.behavior);
@@ -1189,8 +1277,19 @@ function elementDetailsHtml(item, page) {
 
   return `
     <h3>${escapeHtml(item.label)}</h3>
+    ${item.kind === "image" ? imageModeToggleHtml(item.payload) : ""}
     ${imagePreview}
-    ${imagePreview ? `<p class="muted small">Click the preview to open it at any size.</p>` : ""}
+    ${
+      imagePreview
+        ? `<p class="muted small">Click the preview to open it at any size. ${
+            hasOwnPixels(item.payload) &&
+            Array.isArray(item.payload.bbox) &&
+            item.payload.bbox.length === 4
+              ? IMAGE_MODE_NOTE[imageViewMode]
+              : ""
+          }</p>`
+        : ""
+    }
     ${imageChoices}
     <dl class="kv">
       <dt>Kind</dt><dd>${item.kind}</dd>
@@ -1718,6 +1817,14 @@ function imagesHtml(page) {
         ])}
       </div>
       <p class="muted small">
+        Thumbnails show ${
+          imageViewMode === "page"
+            ? "each image's region of the page, including text and graphics drawn over it"
+            : "each image's own stored pixels, without anything the page draws over them"
+        }.
+        ${imageModeToggleHtml({ xref: 1, bbox: [0, 0, 1, 1] })}
+      </p>
+      <p class="muted small">
         Image XObjects are stored once per xref and reused for every placement; each placement
         keeps its own bbox and matrix.
       </p>
@@ -1727,14 +1834,45 @@ function imagesHtml(page) {
 
 /* ---------------------------------------------------------------- drawings */
 
-function drawingsHtml(page) {
-  const paths = page.drawings || [];
-  if (!paths.length) return `<p class="muted">No vector graphics on page ${page.page_number + 1}.</p>`;
+/* Window controls for lists too long to inline: "showing a–b of n" with paging.
+   `act` is the action prefix whose handler fetches the next window. */
+function windowBarHtml(act, offset, returned, total, limit) {
+  const first = returned ? offset + 1 : 0;
+  const last = offset + returned;
+  const known = typeof total === "number";
+  const hasPrev = offset > 0;
+  const hasNext = known ? last < total : returned >= limit;
+  return `<p class="muted small window-bar">
+    Showing ${first.toLocaleString()}–${last.toLocaleString()} of
+    ${known ? total.toLocaleString() : "an unknown number of"} —
+    ${limit.toLocaleString()} per window
+    <button class="button small" data-act="${act}-first" ${hasPrev ? "" : "disabled"}>&laquo; first</button>
+    <button class="button small" data-act="${act}-prev" ${hasPrev ? "" : "disabled"}>&lsaquo; previous</button>
+    <button class="button small" data-act="${act}-next" ${hasNext ? "" : "disabled"}>next &rsaquo;</button>
+  </p>`;
+}
+
+function drawingsHtml(page, doc) {
+  const window = doc.drawingsWindow;
+  const paths = (window && window.items) || page.drawings || [];
+  const info = window || page.drawings_info || {};
+  const total = info.total ?? paths.length;
+  const offset = info.offset ?? 0;
+  const limit = info.limit ?? paths.length;
+  if (!total) return `<p class="muted">No vector graphics on page ${page.page_number + 1}.</p>`;
   return `
     <div class="card">
-      <div class="card-head"><h2>Vector graphics (${paths.length})</h2>
+      <div class="card-head"><h2>Vector graphics (${Number(total).toLocaleString()})</h2>
         ${actionBar([{ act: "copy-json", label: "Copy JSON", data: `data-key="page.drawings"` }])}
       </div>
+      ${
+        total > paths.length || offset > 0
+          ? windowBarHtml("drawings", offset, paths.length, total, limit) +
+            `<p class="muted small">This page holds more paths than any single report should
+             carry, so they are read in windows. "Copy JSON" copies the window in view; the
+             whole set is in the page report download.</p>`
+          : ""
+      }
       <table>
         <thead><tr><th>#</th><th>Type</th><th>Rect</th><th>Stroke</th><th>Fill</th><th>Width</th><th>Dashes</th><th>Items</th><th></th></tr></thead>
         <tbody>${paths
@@ -1880,10 +2018,16 @@ function attachmentsHtml(report) {
 
 /* ---------------------------------------------------------- content stream */
 
-function streamHtml(page) {
+function streamHtml(page, doc) {
   const streams = page.content_streams;
   if (streams.error) return `<div class="notice">${escapeHtml(streams.error)}</div>`;
-  const operators = streams.operators || [];
+  const window = doc.operatorsWindow;
+  const operators = (window && window.operators) || streams.operators || [];
+  const offset = window ? window.offset : 0;
+  const limit = (window && window.limit) || operators.length;
+  /* The page report does not count the whole stream — that means lexing it all —
+     so the total is only known once a window has been fetched. */
+  const total = window ? window.total : streams.operators_truncated ? null : operators.length;
   return `
     <div class="card">
       <div class="card-head"><h2>Content stream — page ${page.page_number + 1}</h2>
@@ -1899,21 +2043,29 @@ function streamHtml(page) {
           .map((s) => `${s.xref}${s.filter ? ` (${escapeHtml(s.filter)})` : ""}`)
           .join(", ")}</dd>
         <dt>Decoded bytes</dt><dd>${streams.total_decoded_bytes}</dd>
-        <dt>Operators</dt><dd>${operators.length}${streams.operators_truncated ? " (truncated)" : ""}</dd>
+        <dt>Operators</dt><dd>${
+          total === null
+            ? `${operators.length.toLocaleString()} shown — this stream holds more; page a window to count them all`
+            : `${Number(total).toLocaleString()} in total`
+        }</dd>
       </dl>
       ${
         streams.decoded_truncated
           ? `<div class="notice">The decoded stream shown below is truncated; use “Download decoded” for the whole stream.</div>`
           : ""
       }
+      ${
+        total === null || total > operators.length || offset > 0
+          ? windowBarHtml("operators", offset, operators.length, total, limit)
+          : ""
+      }
       <details open><summary class="muted small">Decompiled operator listing</summary>
         <table>
           <thead><tr><th>#</th><th>Offset</th><th>Operator</th><th>Operands</th><th>Meaning</th></tr></thead>
           <tbody>${operators
-            .slice(0, 4000)
             .map(
               (op, index) => `<tr>
-                <td>${index}</td>
+                <td>${op.index ?? offset + index}</td>
                 <td class="mono small">${op.offset}</td>
                 <td class="mono">${escapeHtml(op.op)}</td>
                 <td class="mono small">${escapeHtml(
@@ -1973,6 +2125,50 @@ function limitsHtml(report) {
 
 function docUrl(suffix) {
   return `/api/documents/${state.selected}${suffix}`;
+}
+
+/* Windowed lists. The page report inlines only the first slice of the vector
+   paths and of the operator listing, because CAD sheets carry hundreds of
+   thousands of paths and millions of operators. Paging fetches the rest from the
+   range endpoints, one window at a time. */
+const LIST_WINDOW = { drawings: 2000, operators: 2000 };
+
+function listWindowState(doc, kind) {
+  return kind === "drawings" ? doc.drawingsWindow : doc.operatorsWindow;
+}
+
+function listWindowLength(doc, kind, page) {
+  const current = listWindowState(doc, kind);
+  if (current) return (kind === "drawings" ? current.items : current.operators).length;
+  if (!page) return 0;
+  return kind === "drawings"
+    ? (page.drawings || []).length
+    : ((page.content_streams || {}).operators || []).length;
+}
+
+async function fetchListWindow(doc, kind, direction) {
+  const page = doc.pages.get(doc.pageIndex);
+  const limit = LIST_WINDOW[kind];
+  const current = listWindowState(doc, kind);
+  const offset = current ? current.offset : 0;
+  const shown = listWindowLength(doc, kind, page);
+
+  let target = 0;
+  if (direction === "prev") target = Math.max(0, offset - limit);
+  else if (direction === "next") target = offset + shown;
+
+  if (kind === "operators") toast("Counting the operators in this stream…");
+  try {
+    const data = await apiJson(
+      docUrl(`/pages/${doc.pageIndex}/${kind}?offset=${target}&limit=${limit}`)
+    );
+    if (kind === "drawings") doc.drawingsWindow = data;
+    else doc.operatorsWindow = data;
+  } catch (error) {
+    toast(error.message, true);
+    return;
+  }
+  renderDocument();
 }
 
 function pathValue(root, path) {
@@ -2052,11 +2248,23 @@ async function handleAction(act, target) {
       copyText(text, "Block text");
       break;
     }
-    case "copy-drawing":
+    case "copy-drawing": {
+      const pool = doc.drawingsWindow ? doc.drawingsWindow.items : page.drawings;
       copyText(
-        pretty(page.drawings.find((path) => String(path.index) === target.dataset.index)),
+        pretty((pool || []).find((path) => String(path.index) === target.dataset.index)),
         "Path JSON"
       );
+      break;
+    }
+    case "drawings-first":
+    case "drawings-prev":
+    case "drawings-next":
+      await fetchListWindow(doc, "drawings", act.split("-")[1]);
+      break;
+    case "operators-first":
+    case "operators-prev":
+    case "operators-next":
+      await fetchListWindow(doc, "operators", act.split("-")[1]);
       break;
     case "copy-image-json":
       copyText(pretty(page.images.placements[Number(target.dataset.index)]), "Image JSON");
@@ -2339,6 +2547,29 @@ document.addEventListener("keydown", (event) => {
 /* Clicking anywhere else dismisses the picker. */
 document.addEventListener("click", (event) => {
   if (!event.target.closest(".box-picker") && !event.target.closest(".box")) closeBoxPicker();
+});
+
+/* Switching between stored pixels and the composited page region. */
+function setImageViewMode(mode) {
+  if (imageViewMode === mode) return;
+  imageViewMode = mode;
+  const doc = currentDoc();
+  if (!doc) return;
+  if (doc.tab === "images") {
+    renderDocument();
+    return;
+  }
+  if (doc.selectedElement && doc.selectedElement.kind === "image") {
+    el("element-details").innerHTML = elementDetailsHtml(
+      doc.selectedElement,
+      doc.pages.get(doc.pageIndex)
+    );
+  }
+}
+
+document.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-image-mode]");
+  if (button) setImageViewMode(button.dataset.imageMode);
 });
 
 /* Picking an image from the strip in the details panel: select its overlay box

@@ -265,6 +265,8 @@ Details: [docs/multi-document.md](docs/multi-document.md).
 | `GET` | `/api/documents/{id}/pages/{n}` | Page report |
 | `GET` | `/api/documents/{id}/pages/{n}/report.json` | Download the page report |
 | `GET` | `/api/documents/{id}/pages/{n}/render.png?dpi=&clip=` | Rendered page, or one rectangle of it (`X-Render-Info` carries the scale) |
+| `GET` | `/api/documents/{id}/pages/{n}/drawings?offset=&limit=` | Window of the page's vector paths, with the real total |
+| `GET` | `/api/documents/{id}/pages/{n}/operators?offset=&limit=` | Window of the operator listing, with the exact total |
 | `GET` | `/api/documents/{id}/pages/{n}/text?fmt=txt\|md` | Page text |
 | `GET` | `/api/documents/{id}/pages/{n}/content-stream?raw=` | Decoded or raw content stream |
 | `GET` | `/api/documents/{id}/objects/{xref}` | Object dictionary, stream info, references |
@@ -343,8 +345,13 @@ two documents processed concurrently without cross-contamination.
   hidden.
 - Object-model scans stop at 200 000 objects; structure and name-tree walks at
   5 000 nodes per tree. Truncation is always flagged.
-- Decoded content streams are inlined up to 200 000 characters and operator
-  listings up to 20 000 operators; the full stream is always downloadable.
+- Decoded content streams are inlined up to 200 000 characters; the full stream is
+  always downloadable.
+- Long lists are read in windows, not all at once: a page report inlines the first
+  5 000 vector paths and 5 000 operators, and the rest is reached page by page
+  through the `drawings` and `operators` endpoints. Testing on CAD sheets found
+  265 507 paths and 5 071 999 operators on a single page, so nothing here is
+  hypothetical.
 - Font aggregation scans up to 2 000 pages.
 - Whole-document exports are built before the download starts, so a very large
   document takes a while.

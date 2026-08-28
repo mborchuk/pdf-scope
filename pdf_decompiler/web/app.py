@@ -33,6 +33,7 @@ from ..core.errors import (
     PageNotFoundError,
     PasswordRequiredError,
 )
+from ..core.schema import CONTENT_STREAM_OPERATOR_LIMIT, PAGE_DRAWING_LIMIT
 from . import tasks
 from .jobs import ExtractionPool
 from .registry import DocumentRecord, DocumentRegistry
@@ -318,6 +319,64 @@ async def render_page(
             "Cache-Control": "no-store",
         },
     )
+
+
+@app.get("/api/documents/{document_id}/pages/{page_number}/drawings")
+async def get_page_drawings(
+    document_id: str,
+    page_number: int,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(PAGE_DRAWING_LIMIT, ge=1, le=PAGE_DRAWING_LIMIT),
+) -> Response:
+    """A window of a page's vector paths, with the page's real total.
+
+    The page report inlines only the first window: a CAD sheet can hold hundreds
+    of thousands of paths. This is how the rest is reached.
+    """
+    record = _require_ready(document_id)
+    try:
+        window = await pool.run(
+            tasks.task_page_drawings,
+            str(record.source_path),
+            page_number,
+            offset,
+            limit,
+            record.password,
+        )
+    except PageNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"drawings unavailable: {exc}") from exc
+    return _json(window)
+
+
+@app.get("/api/documents/{document_id}/pages/{page_number}/operators")
+async def get_page_operators(
+    document_id: str,
+    page_number: int,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(2_000, ge=1, le=CONTENT_STREAM_OPERATOR_LIMIT),
+) -> Response:
+    """A window of a page's content-stream operators, with the exact total.
+
+    The whole stream is lexed to count operators, so the total is exact; only the
+    requested window is materialised.
+    """
+    record = _require_ready(document_id)
+    try:
+        window = await pool.run(
+            tasks.task_page_operators,
+            str(record.source_path),
+            page_number,
+            offset,
+            limit,
+            record.password,
+        )
+    except PageNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"operators unavailable: {exc}") from exc
+    return _json(window)
 
 
 @app.get("/api/documents/{document_id}/pages/{page_number}/text")

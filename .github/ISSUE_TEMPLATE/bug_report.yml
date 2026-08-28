@@ -1,0 +1,80 @@
+name: Bug report
+description: Something extracted wrongly, crashed, or did not show up
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please do not attach confidential PDFs. If you cannot share the file,
+        describe how to generate a similar one — `tests/conftest.py` shows how
+        the project builds fixture PDFs with PyMuPDF.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what you got instead.
+      placeholder: |
+        1. Opened X.pdf
+        2. Went to the Images panel on page 3
+        3. Expected the SMask xref, got "none"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Extraction core (wrong or missing data)
+        - Web API
+        - User interface
+        - Rendering / overlay alignment
+        - Exports and downloads
+        - Multi-document handling
+        - Install / startup
+        - Documentation
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: document
+    attributes:
+      label: The document
+      description: >
+        Page count, roughly how it was produced (scanner, LaTeX, Word, a
+        specific library), whether it is encrypted, tagged, linearised.
+        Attach the file only if it is safe to share publicly.
+    validations:
+      required: false
+
+  - type: textarea
+    id: output
+    attributes:
+      label: Relevant output
+      description: >
+        Server log lines, browser console errors, or the JSON snippet that is
+        wrong. Paste as text, not screenshots, where possible.
+      render: text
+    validations:
+      required: false
+
+  - type: input
+    id: version
+    attributes:
+      label: Versions
+      description: >
+        Output of `python -c "import sys, pymupdf; print(sys.version); print(pymupdf.version)"`
+        plus the project version or commit.
+      placeholder: "3.12.4 | ('1.28.2', '1.28.2', None) | v0.1.0"
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system and browser
+      placeholder: "macOS 15.6 / Firefox 141"
+    validations:
+      required: true

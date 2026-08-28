@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PDF decompiler</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <h1>PDF decompiler</h1>
+      <div class="topbar-actions">
+        <label class="button primary">
+          Open PDFs
+          <input id="file-input" type="file" accept="application/pdf,.pdf" multiple hidden />
+        </label>
+        <button id="download-all" class="button" title="Complete extraction of every open document">
+          Download everything (all documents)
+        </button>
+        <span id="pool-status" class="muted"></span>
+      </div>
+    </header>
+
+    <main class="layout">
+      <aside class="sidebar">
+        <h2>Documents</h2>
+        <ul id="document-list" class="document-list"></ul>
+        <p id="document-empty" class="muted small">
+          No documents open. Choose one or more PDFs to begin. Files stay on this machine.
+        </p>
+      </aside>
+
+      <section class="content">
+        <div id="document-header" class="document-header hidden">
+          <div>
+            <h2 id="document-title"></h2>
+            <p id="document-subtitle" class="muted small"></p>
+          </div>
+          <div class="document-actions">
+            <button class="button" data-action="download-doc-json">Document JSON</button>
+            <button class="button" data-action="download-doc-text">Text (.txt)</button>
+            <button class="button" data-action="download-doc-md">Text (.md)</button>
+            <button class="button" data-action="download-doc-images">Images (zip)</button>
+            <button class="button primary" data-action="download-doc-bundle">
+              Download everything
+            </button>
+          </div>
+        </div>
+
+        <nav id="tabs" class="tabs hidden">
+          <button class="tab active" data-tab="page">Page</button>
+          <button class="tab" data-tab="structure">Structure</button>
+          <button class="tab" data-tab="objects">Objects</button>
+          <button class="tab" data-tab="metadata">Metadata</button>
+          <button class="tab" data-tab="fonts">Fonts</button>
+          <button class="tab" data-tab="text">Text</button>
+          <button class="tab" data-tab="images">Images</button>
+          <button class="tab" data-tab="drawings">Drawings</button>
+          <button class="tab" data-tab="annotations">Annotations</button>
+          <button class="tab" data-tab="forms">Forms</button>
+          <button class="tab" data-tab="attachments">Attachments</button>
+          <button class="tab" data-tab="stream">Content stream</button>
+          <button class="tab" data-tab="limits">Not extractable</button>
+        </nav>
+
+        <div id="panels" class="panels">
+          <!-- Page panel: rendered page + overlays + element details -->
+          <div class="panel active" data-panel="page">
+            <div class="page-toolbar">
+              <button class="button" data-action="page-first" title="First page (Home)">
+                &laquo;
+              </button>
+              <button class="button" data-action="page-prev" title="Previous page (← or Page Up)">
+                &lsaquo;
+              </button>
+              <span id="page-indicator" class="muted"></span>
+              <button class="button" data-action="page-next" title="Next page (→ or Page Down)">
+                &rsaquo;
+              </button>
+              <button class="button" data-action="page-last" title="Last page (End)">
+                &raquo;
+              </button>
+              <input
+                id="page-jump"
+                type="number"
+                min="1"
+                value="1"
+                title="Go to page — type a number and press Enter"
+              />
+              <label class="zoom">
+                Zoom
+                <input id="zoom" type="range" min="50" max="300" step="10" value="100" />
+                <span id="zoom-label">100%</span>
+              </label>
+              <span class="overlay-toggles" id="overlay-toggles"></span>
+              <span class="page-downloads">
+                <button class="button small" data-action="download-page-json">Page JSON</button>
+                <button class="button small" data-action="download-page-text">Page text</button>
+                <button class="button small" data-action="copy-page-text">Copy page text</button>
+              </span>
+            </div>
+            <div class="page-body">
+              <!-- Continuous scroller. One slot per page is built by app.js;
+                   renders and overlays are attached only near the viewport. -->
+              <div id="page-canvas" class="page-canvas" tabindex="0"></div>
+              <aside id="element-details" class="details">
+                <p class="muted small">
+                  Hover or click a highlighted element on the page to inspect it.
+                </p>
+              </aside>
+            </div>
+          </div>
+
+          <div class="panel" data-panel="structure"></div>
+          <div class="panel" data-panel="objects"></div>
+          <div class="panel" data-panel="metadata"></div>
+          <div class="panel" data-panel="fonts"></div>
+          <div class="panel" data-panel="text"></div>
+          <div class="panel" data-panel="images"></div>
+          <div class="panel" data-panel="drawings"></div>
+          <div class="panel" data-panel="annotations"></div>
+          <div class="panel" data-panel="forms"></div>
+          <div class="panel" data-panel="attachments"></div>
+          <div class="panel" data-panel="stream"></div>
+          <div class="panel" data-panel="limits"></div>
+        </div>
+
+        <p id="no-selection" class="muted placeholder">
+          Select a document on the left to explore its structure and contents.
+        </p>
+      </section>
+    </main>
+
+    <div id="toast" class="toast hidden"></div>
+
+    <dialog id="copy-fallback">
+      <p>Clipboard access was blocked by the browser. Select the text below and copy it.</p>
+      <textarea id="copy-fallback-text" rows="12"></textarea>
+      <form method="dialog"><button class="button">Close</button></form>
+    </dialog>
+
+    <!-- Scalable image preview. Opened by clicking any thumbnail. -->
+    <dialog id="image-viewer" class="viewer">
+      <div class="viewer-bar">
+        <strong id="viewer-title"></strong>
+        <span id="viewer-meta" class="muted small"></span>
+        <span class="viewer-controls">
+          <button class="button small" data-viewer="out" title="Zoom out (−)">&minus;</button>
+          <span id="viewer-zoom" class="muted small"></span>
+          <button class="button small" data-viewer="in" title="Zoom in (+)">+</button>
+          <button class="button small" data-viewer="fit" title="Fit to window (0)">Fit</button>
+          <button class="button small" data-viewer="actual" title="Actual pixels (1)">1:1</button>
+          <button class="button small" data-viewer="download">Download</button>
+          <button class="button small" data-viewer="copy">Copy</button>
+          <button class="button small" data-viewer="close" title="Close (Esc)">Close</button>
+        </span>
+      </div>
+      <div id="viewer-body" class="viewer-body">
+        <img id="viewer-image" alt="image preview" />
+      </div>
+      <p id="viewer-note" class="muted small viewer-note"></p>
+    </dialog>
+
+    <dialog id="password-dialog">
+      <form method="dialog" id="password-form">
+        <h3>Password required</h3>
+        <p class="muted small" id="password-target"></p>
+        <input type="password" id="password-input" placeholder="Document password" />
+        <menu>
+          <button class="button" value="cancel">Cancel</button>
+          <button class="button primary" id="password-submit" value="ok">Unlock</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>

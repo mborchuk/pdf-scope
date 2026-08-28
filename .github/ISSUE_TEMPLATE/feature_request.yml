@@ -1,0 +1,56 @@
+name: Feature request
+description: Something in a PDF that the tool should expose but does not
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before opening: check [docs/coverage.md](../../blob/main/docs/coverage.md)
+        — the feature may already be listed as something PyMuPDF cannot reach.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What should the tool show
+      description: The PDF feature, structure or workflow that is missing.
+      placeholder: >
+        Shading dictionaries (/Shading resources) with their type, colour space
+        and function, so gradients can be inspected.
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why it matters
+      description: What you are trying to understand about a document.
+    validations:
+      required: true
+
+  - type: input
+    id: spec
+    attributes:
+      label: Specification reference
+      description: Clause of ISO 32000-1/2 or the PDF reference, if you know it.
+      placeholder: "ISO 32000-1, 8.7.4.5 (shading patterns)"
+    validations:
+      required: false
+
+  - type: input
+    id: api
+    attributes:
+      label: PyMuPDF API that exposes it
+      description: The method or attribute that would provide the data, if known.
+      placeholder: "Document.xref_get_key(xref, 'Shading')"
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope check
+      options:
+        - label: This is about understanding PDFs, not editing or converting them
+          required: true
+        - label: It works offline, with no external service
+          required: true

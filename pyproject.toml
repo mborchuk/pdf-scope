@@ -23,7 +23,7 @@ dependencies = [
     "pymupdf==1.28.2",
     "fastapi==0.121.2",
     "uvicorn==0.41.0",
-    "python-multipart==0.0.20",
+    "python-multipart==0.0.32",
 ]
 
 [project.urls]

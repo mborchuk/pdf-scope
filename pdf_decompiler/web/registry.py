@@ -53,6 +53,9 @@ class DocumentRecord:
     password: str | None = None
     report: dict[str, Any] | None = None
     duplicate_of: str | None = None
+    #: Content counts per page number, filled in as ranges are requested. Counting
+    #: touches every page, so results are kept for the life of the document.
+    summary_pages: dict[int, dict[str, Any]] = field(default_factory=dict)
 
     @property
     def source_path(self) -> Path:

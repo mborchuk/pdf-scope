@@ -386,6 +386,29 @@ bytes could not be extracted.
 [`/images/{filename}`](api.md#get-imagesfilename). One xref is written once,
 however many placements reference it.
 
+### tables
+
+Tables **detected** on the page. PDF has no table object: PyMuPDF reconstructs
+tables from ruling lines and text alignment, so this is an interpretation of the
+layout, and the report says so in `note`.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `count` | int | Tables detected |
+| `note` | string | States that this is a detection, not stored data |
+| `skipped` | bool | True when detection was not attempted |
+| `skip_reason` | string | Present with `skipped`: the page holds more vector paths than `core.tables.TABLE_DETECTION_PATH_GUARD` (20 000), where detection takes tens of seconds |
+| `error` | string | Detection was attempted and failed |
+| `items[].index` | int | Position among the detected tables |
+| `items[].bbox` | rect | Bounding box of the table |
+| `items[].row_count`, `items[].col_count` | int | Grid size as detected |
+| `items[].header` | object | `names[]` (may contain `null` for unnamed columns), `external` (header sits above the table), `bbox` |
+| `items[].cell_bboxes` | array | One rect per cell, `null` for merged or absent cells |
+| `items[].rows` | array | Cell text, row by row, up to `TABLE_ROW_LIMIT` (300) rows |
+| `items[].rows_truncated` | bool | True when the table has more rows than that |
+| `items[].markdown` | string | The table rendered as Markdown, up to 40 000 characters |
+| `items[].markdown_truncated` | bool | True when that was cut |
+
 ### drawings
 
 Array of paths, in painting order — **a window, not necessarily the whole page**.

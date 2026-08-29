@@ -203,6 +203,8 @@ see [coordinate systems](docs/pdf-primer.md#coordinate-systems).
 | Object model | xref slots, per-`/Type` histogram, stream counts, object streams, cross-reference streams; any object by number with entries, source, stream sizes, decoded stream and references |
 | Pages | All five boxes plus `page.rect`, `/Rotate`, four matrices, page dictionary, `/Resources` per category (direct and indirect) |
 | Content streams | Per-stream xrefs, filters, raw/decoded sizes, decoded text, and an ordered operator listing with operands, offsets and descriptions |
+| Tables | Detected from ruling lines and text alignment: bounding box, row and column counts, header names, cell rectangles, cell text and Markdown. Labelled as a detection, because PDF has no table object |
+| Document overview | Producer, creator, dates, page sizes, and counts of text, images, vector paths, tables, annotations, links and form fields across the document |
 | Text | Page, block, line, span, character; bbox, font, size, colour, alpha, ascender/descender, font and style flags, writing mode, direction |
 | Fonts | Base name, subtype, embedded flag and extension, subset prefix, encoding, resource name, `/FontDescriptor` and `/ToUnicode` xrefs, usage per page |
 | Images | Original bytes, pixel size, DPI, colourspace, bit depth, filters, SMask, per-placement bbox and matrix, inline images |
@@ -259,6 +261,7 @@ Details: [docs/multi-document.md](docs/multi-document.md).
 | `POST` | `/api/documents` | Upload one or more PDFs |
 | `GET` | `/api/documents` | List open documents, limits, pool state |
 | `GET` | `/api/documents/{id}` | Summary plus the document report |
+| `GET` | `/api/documents/{id}/summary?offset=&limit=` | Per-page and total content counts, including detected tables |
 | `POST` | `/api/documents/{id}/unlock` | Retry an encrypted document with a password |
 | `DELETE` | `/api/documents/{id}` | Close and delete artifacts |
 | `GET` | `/api/documents/{id}/report.json` | Download the document report |

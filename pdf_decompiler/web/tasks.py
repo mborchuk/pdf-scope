@@ -16,6 +16,7 @@ from ..core import (
     analyze_page,
     build_document_bundle,
     describe_object,
+    document_content_summary,
     document_text,
     image_preview_png,
     open_document,
@@ -91,6 +92,22 @@ def task_object_stream(path: str, xref: int, password: str | None, raw: bool) ->
         return doc.xref_stream_raw(xref) if raw else doc.xref_stream(xref)
     finally:
         doc.close()
+
+
+def task_content_summary(
+    path: str,
+    offset: int,
+    limit: int | None,
+    include_tables: bool,
+    password: str | None,
+) -> dict[str, Any]:
+    return document_content_summary(
+        path,
+        password=password,
+        offset=offset,
+        limit=limit,
+        include_tables=include_tables,
+    )
 
 
 def task_page_drawings(

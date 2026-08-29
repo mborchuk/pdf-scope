@@ -11,6 +11,21 @@ from the application: see [docs/schema.md](docs/schema.md#versioning).
 
 ### Added
 
+- **Overview tab**, now the first tab and where a freshly opened document lands:
+  what the file is (size, PDF version, pages, page sizes, SHA-256), who made it
+  (producer, creator, dates, title, author), what is inside it (characters, words,
+  images, vector paths, tables, annotations, links, form fields, pages without a
+  text layer), its structure and security, plus a per-page table with **Open** to
+  jump into the page view.
+- `GET /api/documents/{id}/summary?offset=&limit=&include_tables=` — per-page and
+  total content counts, cached per page and walked in ranges. Backed by
+  `pdf_decompiler.core.document_content_summary`.
+- **Table detection** (`core/tables.py`): every table PyMuPDF can reconstruct on a
+  page, with bounding box, row and column counts, header names, cell rectangles,
+  cell text and a Markdown rendering — always labelled as a detection, because PDF
+  has no table object. Tables are in the page report, are a new overlay kind on the
+  page view, and are counted in the Overview. Detection is skipped above 20 000
+  vector paths, where it takes tens of seconds, and says so.
 - Page view is now a continuous scroller: all pages of a document are stacked
   and scrolled like in a normal PDF viewer, with lazy rendering so only the
   pages near the viewport are fetched, extracted and overlaid.

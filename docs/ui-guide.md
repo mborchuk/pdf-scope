@@ -8,6 +8,7 @@ HTML file, one CSS file, one JavaScript file, all in
 - [Top bar](#top-bar)
 - [Document sidebar](#document-sidebar)
 - [Document header](#document-header)
+- [Overview tab](#overview-tab)
 - [Page tab](#page-tab)
 - [Structure tab](#structure-tab)
 - [Objects tab](#objects-tab)
@@ -35,7 +36,7 @@ HTML file, one CSS file, one JavaScript file, all in
 │ Documents     │ file.pdf · PDF 1.7 · 4 pages · 11 KB · sha256 … · id  │
 │ ┌───────────┐ │            [Document JSON] [.txt] [.md] [Images] […]  │
 │ │ a.pdf     │ ├──────────────────────────────────────────────────────┤
-│ │ ready   4 │ │ Page │ Structure │ Objects │ Metadata │ Fonts │ …     │
+│ │ ready   4 │ │ Overview │ Page │ Structure │ Objects │ Metadata │ …  │
 │ ├───────────┤ ├──────────────────────────────────────────────────────┤
 │ │ b.pdf     │ │  « ‹ 2 / 4 › »  [2] zoom ▓▓▓ ☑blocks ☐lines ☑images  │
 │ │ analyzing │ │ ┌───────────────────────────┐ ┌────────────────────┐ │
@@ -94,6 +95,32 @@ of the document id — enough to tell two similar files apart at a glance.
 | **Images (zip)** | Every image of every page, extracting pages first if needed |
 | **Download everything** | The complete bundle for this document |
 
+## Overview tab
+
+The first tab, and the one a freshly opened document lands on: what this file is,
+before looking at any page.
+
+| Card | Contents |
+| --- | --- |
+| **File** | Name, size, PDF version, page count, the page sizes in use with how many pages have each, how many pages are rotated, SHA-256, document id |
+| **Who made it** | Producer, creator, creation and modification dates, title, author, subject, keywords, language — with a reminder that these are the file's own claims, and the raw Info dictionary and XMP are in the Metadata tab |
+| **Contents** | Characters, words, image placements, vector paths, tables detected, annotations, links, form fields, and how many pages have no text layer |
+| **Structure and security** | Tagged or not, outline entries, fonts (and how many are embedded), attachments, form fields, optional-content groups, document JavaScript, encryption, repaired-on-open, fast web view, xref slots, object streams |
+| **Warnings** | Anything the extractor wants to say about this specific file |
+| **Pages** | One row per page: label, size, rotation, and once counted the characters, images, paths, tables and annotations on it, with **Open** to jump straight into the page view |
+
+**How counting works.** Everything except the *Contents* card and the count columns
+is already in the document report, so it appears instantly. Counting content means
+touching every page: cheap on text pages, seconds on a CAD sheet. So counting
+starts on its own in batches of 25 pages, stops after about 8 seconds, and offers
+**Continue counting**; documents over 400 pages are only counted on request. The
+counts fill in progressively, and the server keeps them for as long as the document
+is open, so revisiting the tab is instant.
+
+Table counts can be incomplete by design: on pages with more than 20 000 vector
+paths detection is skipped, that page's cell reads *skipped*, and the card says the
+total is partial.
+
 ## Page tab
 
 Every page of the document is stacked in one continuous scroller, so a document
@@ -147,6 +174,7 @@ Keys are ignored while a text field has focus, and while a tab other than
 | Spans | amber | off | `lines[].spans[]` |
 | Characters | purple | off | `spans[].chars[]` — dense on text-heavy pages |
 | Images | orange | on | `images.placements[]` |
+| Tables | green, dashed | on | `tables.items[]` — detected, not stored in the file. Selecting one shows its grid size, header cells and the table as Markdown, with **Copy table as Markdown** |
 | Drawings | teal | off | `drawings[]` |
 | Annotations | red | on | `annotations[]` |
 | Links | violet | on | `links[]` |

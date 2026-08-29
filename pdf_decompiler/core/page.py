@@ -11,6 +11,7 @@ from . import annotations as annots_module
 from . import drawings as drawings_module
 from . import images as images_module
 from . import objects, text
+from . import tables as tables_module
 from .contentstream import parse_content_stream
 from .coordinates import COORDINATE_SPACE_NOTE, rect_to_list, rect_to_pdf_space
 from .document import open_document, page_transform_matrices
@@ -101,6 +102,7 @@ def analyze_page(
     image_dir: str | Path | None = None,
     include_operators: bool = True,
     drawing_limit: int | None = PAGE_DRAWING_LIMIT,
+    include_tables: bool = True,
 ) -> dict[str, Any]:
     """Produce the full report for a single page.
 
@@ -155,6 +157,11 @@ def analyze_page(
             "drawings_info": {
                 key: drawing_window[key] for key in ("total", "offset", "limit", "truncated")
             },
+            "tables": tables_module.extract_tables(
+                page,
+                path_count=drawing_window.get("total"),
+                include_text=include_tables,
+            ),
             "annotations": annots_module.extract_annotations(page),
             "links": annots_module.extract_links(page),
             "widgets": annots_module.extract_widgets(page),

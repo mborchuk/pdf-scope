@@ -134,6 +134,7 @@ h3 { font-size: 13px; margin: 16px 0 6px; text-transform: uppercase; letter-spac
 .box.span { border-color: #f0b859; }
 .box.char { border-color: #b392f0; }
 .box.image { border-color: #ff9f6e; }
+.box.table { border-color: #59d4a0; border-style: dashed; }
 .box.drawing { border-color: #64d9d9; }
 .box.annotation { border-color: #f2777a; }
 .box.link { border-color: #d2a8ff; }
@@ -143,6 +144,9 @@ h3 { font-size: 13px; margin: 16px 0 6px; text-transform: uppercase; letter-spac
   width: 340px; flex: 0 0 340px; border-left: 1px solid var(--line);
   padding: 12px; overflow: auto; background: var(--bg-soft);
 }
+/* Element text: readable, but never so tall that it pushes the facts off screen. */
+.details .element-text { max-height: 240px; font-size: 12px; }
+.details .thumb { height: auto; max-height: 220px; }
 
 table { border-collapse: collapse; width: 100%; font-size: 12px; }
 th, td { border-bottom: 1px solid var(--line); padding: 5px 6px; text-align: left; vertical-align: top; }

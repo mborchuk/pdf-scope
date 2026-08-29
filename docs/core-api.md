@@ -44,6 +44,7 @@ Re-exported from `pdf_decompiler.core`:
 | `open_document` | function | Open and authenticate a file |
 | `describe_object` | function | Describe one indirect object |
 | `page_content_stream_bytes` | function | Whole content stream of a page |
+| `document_content_summary` | function | Per-page and total content counts |
 | `page_drawings` | function | A window of a page's vector paths, with the total |
 | `page_operators` | function | A window of the operator listing, with the exact total |
 | `render_page_png` | function | Render a page to PNG |
@@ -272,6 +273,40 @@ x0, y0, x1, y1 = span["bbox"]
 box_px = ((x0 - rect[0]) * zoom, (y0 - rect[1]) * zoom,
           (x1 - rect[0]) * zoom, (y1 - rect[1]) * zoom)
 ```
+
+## Content counts and tables
+
+```python
+document_content_summary(
+    path, *, password=None, offset=0, limit=None, include_tables=True
+) -> dict
+```
+
+Counts the content of a range of pages: characters, words, image placements,
+vector paths, detected tables, annotations, links and form fields, per page and as
+totals. Nothing is inlined — counts only. `limit=None` counts every page.
+
+```python
+summary = document_content_summary("tender.pdf")
+summary["totals"]["tables"]            # 63
+summary["pages_without_text_layer"]    # 0
+summary["pages"][0]["drawings"]        # 2
+```
+
+```python
+from pdf_decompiler.core.tables import extract_tables
+
+extract_tables(page, *, path_count=None, path_guard=20_000, include_text=True) -> dict
+```
+
+Detects tables on an open `pymupdf.Page`: bounding box, row and column counts,
+header names, per-cell rectangles, the cell text and a Markdown rendering. PDF has
+no table object, so this is a reconstruction from ruling lines and text alignment —
+the result carries a `note` saying exactly that.
+
+Detection walks the page's vector graphics, which costs 19 s on a sheet with
+265 507 paths, so pages above `path_guard` paths are skipped and say why. Pass
+`path_count` if the caller already counted the paths.
 
 ## Windowed lists
 

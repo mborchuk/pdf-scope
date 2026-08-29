@@ -121,6 +121,15 @@ the UI (**Not extractable** tab) and here.
 | Glyph outlines, widths, kerning, CMaps | ❌ | Not decoded |
 | Font metrics (`/FontBBox`, `/StemV`, …) | 🟡 | Visible in the descriptor object, unparsed |
 
+## Tables
+
+| Feature | Status | Where / notes |
+| --- | --- | --- |
+| Table detection | 🟡 | PDF has no table object; PyMuPDF reconstructs tables from ruling lines and text alignment. Reported per page with bbox, row/column counts, header names, cell rectangles, cell text and Markdown — always labelled as a detection |
+| Tables on graphics-heavy pages | 🟡 | Skipped above 20 000 vector paths, where detection takes tens of seconds; the page says so (`tables.skipped`) rather than stalling |
+| Borderless tables | 🟡 | Detected only where text alignment is regular enough; a layout-analysis package would do better |
+| Merged cells | 🟡 | Reported as `null` cell rectangles; no row/column span model |
+
 ## Images
 
 | Feature | Status | Where / notes |

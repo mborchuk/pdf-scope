@@ -18,6 +18,7 @@ const OVERLAY_KINDS = [
   { key: "span", label: "Spans", on: false },
   { key: "char", label: "Characters", on: false },
   { key: "image", label: "Images", on: true },
+  { key: "table", label: "Tables", on: true },
   { key: "drawing", label: "Drawings", on: false },
   { key: "annotation", label: "Annotations", on: true },
   { key: "link", label: "Links", on: true },
@@ -590,9 +591,13 @@ async function loadDocumentReport(documentId) {
     elementsByPage: new Map(),
     drawingsWindow: null,
     operatorsWindow: null,
+    summary: null,
+    counting: false,
+    countStarted: false,
+    countPaused: false,
     scrollTop: 0,
     zoom: 1,
-    tab: "page",
+    tab: "overview",
     toggles: Object.fromEntries(OVERLAY_KINDS.map((k) => [k.key, k.on])),
     object: null,
   });
@@ -674,6 +679,24 @@ function renderDocument() {
 
 function renderPanel(tab, panel, doc, report) {
   switch (tab) {
+    case "overview":
+      panel.innerHTML = overviewHtml(doc, report, doc.summary);
+      if (doc.counting) {
+        panel.querySelectorAll('[data-act="count-content"]').forEach((button) => {
+          button.disabled = true;
+          button.textContent = "Counting…";
+        });
+      } else if (
+        !doc.summary &&
+        !doc.countStarted &&
+        report.file.page_count <= AUTO_COUNT_PAGE_LIMIT
+      ) {
+        /* Counting is the point of this tab, so it starts on its own — within a
+           time budget, so a heavy document does not grind away unasked. */
+        doc.countStarted = true;
+        countContent(doc, { budgetMs: AUTO_COUNT_BUDGET_MS });
+      }
+      break;
     case "page":
       renderPagePanel(doc);
       break;
@@ -1112,11 +1135,28 @@ function collectElements(page) {
     items.push({ kind, label, bbox, payload });
   };
 
+  /* A short snippet in the label makes the overlay tooltips and the stacked-box
+     chooser readable: "Text block 2" says nothing, "Text block 2 — Handbok" does. */
+  const snippet = (value) => {
+    const flat = (value || "").replace(/\s+/g, " ").trim();
+    return flat ? ` — ${flat.slice(0, 40)}${flat.length > 40 ? "…" : ""}` : "";
+  };
+  const blockText = (block) =>
+    (block.lines || [])
+      .map((line) => (line.spans || []).map((span) => span.text || "").join(""))
+      .join(" ");
+  const lineText = (line) => (line.spans || []).map((span) => span.text || "").join("");
+
   (page.text.structure.blocks || []).forEach((block) => {
     if (block.type === "text") {
-      push("block", `Text block ${block.index}`, block.bbox, block);
+      push("block", `Text block ${block.index}${snippet(blockText(block))}`, block.bbox, block);
       (block.lines || []).forEach((line) => {
-        push("line", `Block ${block.index} line ${line.index}`, line.bbox, line);
+        push(
+          "line",
+          `Block ${block.index} line ${line.index}${snippet(lineText(line))}`,
+          line.bbox,
+          line
+        );
         (line.spans || []).forEach((span) => {
           push("span", `Span "${(span.text || "").slice(0, 24)}"`, span.bbox, span);
           (span.chars || []).forEach((char) =>
@@ -1133,6 +1173,14 @@ function collectElements(page) {
       placement.xref ? `Image xref ${placement.xref}` : `Inline image ${placement.index}`,
       placement.bbox,
       placement
+    )
+  );
+  ((page.tables || {}).items || []).forEach((table) =>
+    push(
+      "table",
+      `Table ${table.index} (${table.row_count} × ${table.col_count})`,
+      table.bbox,
+      table
     )
   );
   (page.drawings || []).forEach((path) =>
@@ -1210,13 +1258,102 @@ function pageSummaryHtml(page) {
     ])}`;
 }
 
+/* The text an element carries.
+ *
+ * Only spans hold text directly: a block or a line is a container, so its text
+ * has to be recomposed from the spans below it — spans joined as written, lines
+ * separated by newlines. Non-text elements borrow whatever reads as their text:
+ * an annotation's contents, a link's target, a field's value. */
+function elementText(item) {
+  const payload = item.payload || {};
+  switch (item.kind) {
+    case "block":
+      return (payload.lines || [])
+        .map((line) => (line.spans || []).map((span) => span.text || "").join(""))
+        .join("\n");
+    case "line":
+      return (payload.spans || []).map((span) => span.text || "").join("");
+    case "span":
+      return payload.text || "";
+    case "char":
+      return payload.c || "";
+    case "annotation":
+      return (payload.info || {}).content || "";
+    case "widget":
+      return payload.field_value === null || payload.field_value === undefined
+        ? ""
+        : String(payload.field_value);
+    case "link":
+      return payload.uri || "";
+    default:
+      return payload.text || "";
+  }
+}
+
+/* A rendered look at the element in place: the page, clipped to its box. Works
+   for anything with a box — a path, an annotation, a form field — and is the only
+   preview those kinds can have, since they store no pixels of their own. */
+function regionThumbHtml(item, page, maxSide) {
+  if (!page || !Array.isArray(item.bbox) || item.bbox.length !== 4) return "";
+  const [x0, y0, x1, y1] = item.bbox;
+  if (x1 - x0 <= 0 || y1 - y0 <= 0) return "";
+  /* Tiny elements are padded so the preview shows them in context rather than as
+     a couple of pixels. */
+  const pad = Math.max(0, (12 - Math.min(x1 - x0, y1 - y0)) / 2);
+  const bbox = [x0 - pad, y0 - pad, x1 + pad, y1 + pad];
+  const url = regionPreviewUrl({ bbox }, page.page_number, maxSide);
+  return `<img class="thumb" alt="${escapeHtml(item.label)} on the page" src="${url}"
+    data-fallback="preview" data-viewer="open" data-source="region"
+    data-label="${escapeHtml(item.label)}" data-page="${page.page_number}"
+    data-xref="" data-file="" data-bbox="${bbox.map((v) => v.toFixed(2)).join(",")}"
+    data-pixels="${Math.max(1, Math.round((bbox[2] - bbox[0]) * 4))}x${Math.max(
+      1,
+      Math.round((bbox[3] - bbox[1]) * 4)
+    )}" />`;
+}
+
+/* Numbers straight out of MuPDF are full doubles; show them at a readable
+   precision. `-1` is MuPDF's "not set" for opacity. */
+const num = (value, digits = 2) =>
+  typeof value === "number" && Number.isFinite(value) ? Number(value.toFixed(digits)) : null;
+
 function elementDetailsHtml(item, page) {
   const [x0, y0, x1, y1] = item.bbox;
   const extra = [];
+  if (item.kind === "block") {
+    const lines = item.payload.lines || [];
+    const spans = lines.flatMap((line) => line.spans || []);
+    const fonts = [...new Set(spans.map((span) => span.font).filter(Boolean))];
+    const sizes = [...new Set(spans.map((span) => span.size).filter(Boolean))];
+    extra.push(
+      ["Lines", lines.length],
+      ["Spans", spans.length],
+      ["Fonts", fonts.join(", ") || "—"],
+      ["Sizes", sizes.map((size) => `${Number(size).toFixed(1)}pt`).join(", ") || "—"]
+    );
+  }
+  if (item.kind === "line") {
+    const spans = item.payload.spans || [];
+    extra.push(
+      ["Spans", spans.length],
+      ["Fonts", [...new Set(spans.map((span) => span.font).filter(Boolean))].join(", ") || "—"],
+      ["Writing direction", roundList(item.payload.direction, 2)],
+      ["Write mode", item.payload.wmode === 1 ? "vertical" : "horizontal"]
+    );
+  }
+  if (item.kind === "char") {
+    const code = (item.payload.c || "").codePointAt(0);
+    extra.push(
+      ["Character", item.payload.c],
+      ["Code point", code === undefined ? "—" : `U+${code.toString(16).toUpperCase().padStart(4, "0")}`],
+      ["Origin", roundList(item.payload.origin)],
+      ["Synthetic glyph", item.payload.synthetic ? "yes" : "no"]
+    );
+  }
   if (item.kind === "span") {
     extra.push(
       ["Font", item.payload.font],
-      ["Size", item.payload.size],
+      ["Size", `${num(item.payload.size, 2)}pt`],
       ["Colour", item.payload.color ? item.payload.color.hex : "—"],
       [
         "Flags",
@@ -1239,18 +1376,71 @@ function elementDetailsHtml(item, page) {
       ["Matrix", roundList(placement.transform, 3)]
     );
   }
+  if (item.kind === "table") {
+    const table = item.payload;
+    extra.push(
+      ["Rows × columns", `${table.row_count} × ${table.col_count}`],
+      ["Header", (table.header || {}).external ? "above the table" : "first row"],
+      ["Header cells", ((table.header || {}).names || []).filter(Boolean).join(" | ") || "—"],
+      ["Cells", (table.cell_bboxes || []).length]
+    );
+  }
   if (item.kind === "drawing") {
     extra.push(
       ["Type", item.payload.type_label],
       ["Stroke", item.payload.stroke ? item.payload.stroke.hex : "none"],
       ["Fill", item.payload.fill ? item.payload.fill.hex : "none"],
-      ["Width", item.payload.width],
+      ["Width", num(item.payload.width, 3)],
       ["Dashes", item.payload.dashes],
+      ["Fill rule", item.payload.even_odd ? "even-odd" : "nonzero"],
+      ["Layer", item.payload.layer],
       ["Path items", (item.payload.items || []).length]
     );
   }
-  if (item.kind === "annotation" || item.kind === "widget") {
-    extra.push(["xref", item.payload.xref]);
+  if (item.kind === "annotation") {
+    const annot = item.payload;
+    const info = annot.info || {};
+    extra.push(
+      ["xref", annot.xref],
+      ["Type", `${annot.type} (${annot.type_number})`],
+      ["Author", info.title],
+      ["Modified", info.modDate],
+      ["Subject", info.subject],
+      /* MuPDF reports -1 when the annotation sets no /CA. */
+      ["Opacity", annot.opacity === -1 ? null : num(annot.opacity, 2)],
+      ["Blend mode", annot.blend_mode],
+      ["Colours", Object.entries(annot.colors || {})
+        .filter(([, value]) => value && value.length)
+        .map(([key, value]) => `${key} ${roundList(value, 2)}`)
+        .join(" · ") || "none"],
+      ["Popup", annot.has_popup ? "yes" : "no"]
+    );
+  }
+  if (item.kind === "link") {
+    const link = item.payload;
+    extra.push(
+      ["Kind", link.kind],
+      ["Target URI", link.uri],
+      ["Target page", link.page === undefined ? null : link.page + 1],
+      ["xref", link.xref]
+    );
+  }
+  if (item.kind === "widget") {
+    const widget = item.payload;
+    extra.push(
+      ["xref", widget.xref],
+      ["Field name", widget.field_name],
+      ["Field type", widget.field_type_string],
+      ["Value", widget.field_value],
+      ["Choices", (widget.choice_values || []).join(", ") || "—"],
+      [
+        "Font",
+        widget.text_font
+          ? `${widget.text_font}${widget.text_fontsize ? ` ${num(widget.text_fontsize, 1)}pt` : ""}`
+          : "—",
+      ],
+      ["Signed", widget.is_signed ? "yes" : "no"]
+    );
   }
 
   const imageFile = item.kind === "image" ? item.payload.file : null;
@@ -1275,19 +1465,40 @@ function elementDetailsHtml(item, page) {
     ]);
   }
 
+  /* Images preview their own pixels; everything else previews its patch of the
+     rendered page, which is the only picture of it that exists. */
+  const preview = imagePreview || regionThumbHtml(item, page, 420);
+  const text = elementText(item);
+
   return `
     <h3>${escapeHtml(item.label)}</h3>
     ${item.kind === "image" ? imageModeToggleHtml(item.payload) : ""}
-    ${imagePreview}
+    ${preview}
     ${
-      imagePreview
+      preview
         ? `<p class="muted small">Click the preview to open it at any size. ${
-            hasOwnPixels(item.payload) &&
-            Array.isArray(item.payload.bbox) &&
-            item.payload.bbox.length === 4
-              ? IMAGE_MODE_NOTE[imageViewMode]
-              : ""
+            imagePreview
+              ? hasOwnPixels(item.payload) &&
+                Array.isArray(item.payload.bbox) &&
+                item.payload.bbox.length === 4
+                ? IMAGE_MODE_NOTE[imageViewMode]
+                : ""
+              : "Rendered from the page inside this element's box, with a little context around it."
           }</p>`
+        : ""
+    }
+    ${
+      text
+        ? `<h3>Text</h3><pre class="element-text">${escapeHtml(text)}</pre>
+           <p class="muted small">${
+             ["block", "line"].includes(item.kind)
+               ? "Recomposed from the spans inside this element: spans as written, one line per line."
+               : item.kind === "annotation"
+                 ? "The annotation's /Contents."
+                 : item.kind === "widget"
+                   ? "The field's current value."
+                   : "Exactly as stored in the text layer."
+           }</p>`
         : ""
     }
     ${imageChoices}
@@ -1300,14 +1511,22 @@ function elementDetailsHtml(item, page) {
         .join("")}
     </dl>
     ${
-      item.payload.text !== undefined
-        ? `<pre>${escapeHtml(item.payload.text)}</pre>`
+      item.kind === "table" && item.payload.markdown
+        ? `<details open><summary class="muted small">Table as Markdown${
+            item.payload.markdown_truncated ? " (truncated)" : ""
+          }</summary><pre>${escapeHtml(item.payload.markdown)}</pre></details>
+           <p class="muted small">${escapeHtml(
+             "Detected from ruling lines and text alignment — PDF has no table object."
+           )}</p>`
         : ""
     }
     ${actionBar(
       [
         { act: "copy-element", label: "Copy element JSON" },
-        item.payload.text !== undefined ? { act: "copy-element-text", label: "Copy text" } : null,
+        item.kind === "table" && item.payload.markdown
+          ? { act: "copy-table-markdown", label: "Copy table as Markdown" }
+          : null,
+        text ? { act: "copy-element-text", label: "Copy text" } : null,
         imageFile ? { act: "download-element-image", label: "Download image" } : null,
         imageFile || item.payload.xref
           ? { act: "copy-element-image", label: "Copy image" }
@@ -1318,6 +1537,249 @@ function elementDetailsHtml(item, page) {
     <details><summary class="muted small">Raw JSON</summary><pre>${escapeHtml(
       pretty(item.payload)
     )}</pre></details>`;
+}
+
+/* ---------------------------------------------------------------- overview
+ *
+ * The first thing shown when a document is opened: what the file is, who made
+ * it, and how much of what is inside it. Everything on the left comes from the
+ * document report, which is already loaded. The content counts on the right need
+ * every page touched, so they are counted in ranges, cached on the server, and
+ * started automatically only for documents small enough for it to be quick.
+ */
+
+const COUNT_CHUNK = 25; // pages per request
+const AUTO_COUNT_BUDGET_MS = 8000; // how long counting may run unasked
+const AUTO_COUNT_PAGE_LIMIT = 400; // above this, counting is only ever on request
+
+const COUNT_LABELS = {
+  characters: "Characters of text",
+  words: "Words",
+  images: "Image placements",
+  drawings: "Vector paths",
+  tables: "Tables detected",
+  annotations: "Annotations",
+  links: "Links",
+  form_fields: "Form fields",
+};
+
+function overviewHtml(doc, report, summary) {
+  const info = report.metadata.info || {};
+  const file = report.file;
+  const identity = report.identity;
+  const encryption = report.encryption;
+  const fonts = report.fonts.items || [];
+  const embedded = fonts.filter((font) => font.embedded).length;
+  const sizes = new Map();
+  (report.pages || []).forEach((page) => {
+    if (!page.width) return;
+    const key = `${Math.round(page.width)} × ${Math.round(page.height)} pt`;
+    sizes.set(key, (sizes.get(key) || 0) + 1);
+  });
+  const sizeText =
+    [...sizes.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([size, count]) => `${size} (${count} page${count === 1 ? "" : "s"})`)
+      .join(", ") || "—";
+  const rotated = (report.pages || []).filter((page) => page.rotation).length;
+
+  const row = (label, value) =>
+    `<dt>${escapeHtml(label)}</dt><dd>${value === null || value === undefined || value === "" ? "—" : escapeHtml(value)}</dd>`;
+
+  return `
+    <div class="grid">
+      <div class="card">
+        <h2>File</h2>
+        <dl class="kv">
+          ${row("Name", identity.source_name)}
+          ${row("Size", formatBytes(identity.source_size_bytes))}
+          ${row("PDF version", file.pdf_version)}
+          ${row("Pages", file.page_count)}
+          ${row("Page size", sizeText)}
+          ${row("Rotated pages", rotated || "none")}
+          ${row("SHA-256", identity.sha256)}
+          ${row("Document id", identity.document_id)}
+        </dl>
+      </div>
+
+      <div class="card">
+        <h2>Who made it</h2>
+        <dl class="kv">
+          ${row("Producer", info.producer)}
+          ${row("Creator", info.creator)}
+          ${row("Created", info.creationDate)}
+          ${row("Modified", info.modDate)}
+          ${row("Title", info.title)}
+          ${row("Author", info.author)}
+          ${row("Subject", info.subject)}
+          ${row("Keywords", info.keywords)}
+          ${row("Language", file.language)}
+        </dl>
+        <p class="muted small">
+          These are the file's own claims: any producer can write anything here.
+          The Metadata tab holds the raw Info dictionary and the XMP packet.
+        </p>
+      </div>
+
+      <div class="card">
+        <h2>Contents</h2>
+        ${contentCountsHtml(doc, report, summary)}
+      </div>
+
+      <div class="card">
+        <h2>Structure and security</h2>
+        <dl class="kv">
+          ${row("Tagged (accessible)", report.structure.struct_tree_root ? "yes" : "no — no /StructTreeRoot")}
+          ${row("Outline entries", (report.structure.outline || []).length || "none")}
+          ${row("Fonts", `${fonts.length} (${embedded} embedded)`)}
+          ${row("Attachments", (report.attachments || []).length || "none")}
+          ${row("Form fields", ((report.form || {}).fields || []).length || "none")}
+          ${row("Optional content groups", ((report.optional_content || {}).ocgs || []).length || "none")}
+          ${row("Document JavaScript", (report.javascript || []).length || "none")}
+          ${row("Encrypted", encryption.is_encrypted ? encryption.method || "yes" : "no")}
+          ${row("Repaired on open", file.is_repaired ? "yes — the file was damaged" : "no")}
+          ${row("Fast web view", file.is_linearized_fast_web_view ? "yes" : "no")}
+          ${row("xref slots", file.xref.xref_length)}
+          ${row("Object streams", file.xref.uses_object_streams ? "used" : "not used")}
+        </dl>
+      </div>
+    </div>
+
+    ${
+      (report.warnings || []).length
+        ? `<div class="card"><h2>Warnings for this document</h2>
+            ${report.warnings.map((warning) => `<div class="notice">${escapeHtml(warning)}</div>`).join("")}
+           </div>`
+        : ""
+    }
+
+    <div class="card">
+      <div class="card-head"><h2>Pages</h2>
+        ${actionBar([{ act: "copy-json", label: "Copy page summaries", data: `data-key="pages"` }])}
+      </div>
+      ${pageSummaryTableHtml(doc, report, summary)}
+    </div>`;
+}
+
+function contentCountsHtml(doc, report, summary) {
+  const total = report.file.page_count;
+  if (!summary) {
+    return `<p class="muted small">
+        Counting text, images, vector paths, tables, annotations and form fields means
+        reading all ${total} page${total === 1 ? "" : "s"}. Pages with heavy CAD
+        graphics take seconds each.
+      </p>
+      ${actionBar([{ act: "count-content", label: `Count contents of ${total} page${total === 1 ? "" : "s"}` }])}`;
+  }
+
+  const counted = summary.pages_counted;
+  const rows = Object.entries(COUNT_LABELS)
+    .map(([key, label]) => {
+      const value = summary.totals[key];
+      const partial = (summary.partial_totals || []).includes(key);
+      return `<dt>${label}</dt><dd>${Number(value).toLocaleString()}${
+        partial ? ` <span class="muted small">(some pages not counted)</span>` : ""
+      }</dd>`;
+    })
+    .join("");
+
+  return `
+    <dl class="kv">${rows}
+      <dt>Pages without a text layer</dt><dd>${summary.pages_without_text_layer}${
+        summary.pages_without_text_layer ? " — scanned or drawn as vector graphics" : ""
+      }</dd>
+    </dl>
+    <p class="muted small">
+      ${
+        summary.complete
+          ? `All ${total} page${total === 1 ? "" : "s"} counted.`
+          : `${counted} of ${total} pages counted${
+              doc.countPaused ? " — paused because the remaining pages are slow" : " so far"
+            }.`
+      }
+      ${
+        (summary.partial_totals || []).includes("tables")
+          ? `Table detection is skipped on pages with more than
+             ${Number(summary.table_detection_path_guard).toLocaleString()} vector paths,
+             where it would take tens of seconds.`
+          : ""
+      }
+    </p>
+    ${
+      summary.complete
+        ? ""
+        : actionBar([{ act: "count-content", label: "Continue counting" }])
+    }`;
+}
+
+function pageSummaryTableHtml(doc, report, summary) {
+  const pages = report.pages || [];
+  const counts = new Map((summary ? summary.pages : []).map((page) => [page.page_number, page]));
+  const shown = pages.slice(0, 200);
+  return `
+    <table>
+      <thead><tr>
+        <th>Page</th><th>Label</th><th>Size (pt)</th><th>Rot.</th>
+        <th>Chars</th><th>Images</th><th>Paths</th><th>Tables</th><th>Annots</th><th></th>
+      </tr></thead>
+      <tbody>${shown
+        .map((page) => {
+          const count = counts.get(page.page_number) || {};
+          const cell = (value) =>
+            value === undefined ? `<span class="muted">—</span>` : Number(value).toLocaleString();
+          return `<tr>
+            <td>${page.page_number + 1}</td>
+            <td>${escapeHtml(page.label || "")}</td>
+            <td class="mono small">${page.width ? `${Math.round(page.width)} × ${Math.round(page.height)}` : "—"}</td>
+            <td>${page.rotation || 0}°</td>
+            <td>${cell(count.characters)}</td>
+            <td>${cell(count.images)}</td>
+            <td>${cell(count.drawings)}</td>
+            <td>${count.tables === null ? `<span class="muted" title="skipped: too many paths">skipped</span>` : cell(count.tables)}</td>
+            <td>${cell(count.annotations)}</td>
+            <td>${actionBar([
+              { act: "open-page", label: "Open", data: `data-page="${page.page_number}"` },
+            ])}</td>
+          </tr>`;
+        })
+        .join("")}</tbody>
+    </table>
+    ${
+      pages.length > shown.length
+        ? `<p class="muted small">Showing the first ${shown.length} of ${pages.length} pages.</p>`
+        : ""
+    }`;
+}
+
+/* Walk the document in chunks, so a long document shows progress as it counts.
+   Started automatically on opening a document, but then only for as long as
+   AUTO_COUNT_BUDGET_MS: an ordinary page costs milliseconds, while a CAD sheet
+   with a quarter of a million paths costs seconds, and nobody asked for that. */
+async function countContent(doc, { budgetMs = null } = {}) {
+  const total = doc.report.file.page_count;
+  const started = Date.now();
+  doc.counting = true;
+  renderDocument();
+  try {
+    while ((doc.summary ? doc.summary.pages_counted : 0) < total) {
+      const offset = doc.summary ? doc.summary.pages_counted : 0;
+      const data = await apiJson(docUrl(`/summary?offset=${offset}&limit=${COUNT_CHUNK}`));
+      doc.summary = data;
+      if (doc !== currentDoc()) break;
+      renderDocument();
+      if (!data.pages_counted || data.pages_counted <= offset) break;
+      if (budgetMs !== null && Date.now() - started > budgetMs) {
+        doc.countPaused = true;
+        break;
+      }
+    }
+  } catch (error) {
+    toast(error.message, true);
+  } finally {
+    doc.counting = false;
+    renderDocument();
+  }
 }
 
 /* --------------------------------------------------------------- structure */
@@ -2288,6 +2750,22 @@ async function handleAction(act, target) {
       if (url) copyImage(url, "Image");
       break;
     }
+    case "count-content":
+      doc.countStarted = true;
+      doc.countPaused = false;
+      await countContent(doc);
+      break;
+    case "open-page": {
+      /* Jump from the overview's page table into the page view. */
+      const index = Number(target.dataset.page);
+      doc.tab = "page";
+      doc.pageIndex = index;
+      doc.drawingsWindow = null;
+      doc.operatorsWindow = null;
+      renderDocument();
+      requestAnimationFrame(() => scrollToPage(doc, index, "auto"));
+      break;
+    }
     case "download-region": {
       const bbox = (target.dataset.bbox || "")
         .split(",")
@@ -2329,7 +2807,10 @@ async function handleAction(act, target) {
       copyText(pretty(doc.selectedElement.payload), "Element JSON");
       break;
     case "copy-element-text":
-      copyText(doc.selectedElement.payload.text || "", "Text");
+      copyText(elementText(doc.selectedElement), "Text");
+      break;
+    case "copy-table-markdown":
+      copyText(doc.selectedElement.payload.markdown || "", "Table");
       break;
     case "download-element-image":
       download(docUrl(`/images/${encodeURIComponent(doc.selectedElement.payload.file)}`));

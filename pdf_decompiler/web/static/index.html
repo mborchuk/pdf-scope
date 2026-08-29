@@ -48,7 +48,8 @@
         </div>
 
         <nav id="tabs" class="tabs hidden">
-          <button class="tab active" data-tab="page">Page</button>
+          <button class="tab active" data-tab="overview">Overview</button>
+          <button class="tab" data-tab="page">Page</button>
           <button class="tab" data-tab="structure">Structure</button>
           <button class="tab" data-tab="objects">Objects</button>
           <button class="tab" data-tab="metadata">Metadata</button>
@@ -64,8 +65,11 @@
         </nav>
 
         <div id="panels" class="panels">
+          <!-- Overview: what this file is, and how much of what is inside it -->
+          <div class="panel active" data-panel="overview"></div>
+
           <!-- Page panel: rendered page + overlays + element details -->
-          <div class="panel active" data-panel="page">
+          <div class="panel" data-panel="page">
             <div class="page-toolbar">
               <button class="button" data-action="page-first" title="First page (Home)">
                 &laquo;

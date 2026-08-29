@@ -143,6 +143,20 @@ Raster resolution is `dpi = 96 × zoom`, capped at 400. Beyond that the bitmap
 is upscaled by the browser. The cap keeps memory bounded — a 400 dpi A4 page is
 already ~3300 × 4700 pixels.
 
+**The Overview tab shows no content counts, or says the total is partial**
+Counting reads every page, so it runs in batches and pauses after about 8 seconds;
+press **Continue counting**. Documents over 400 pages are only counted on request.
+A partial `tables` total means detection was skipped on at least one page — that
+happens above 20 000 vector paths, where it would take tens of seconds; those pages
+show *skipped* in the table column.
+
+**A table I can see is not detected, or one I cannot see is**
+PDF has no table object. Tables are reconstructed from ruling lines and text
+alignment, so a borderless table with irregular spacing can be missed, and a ruled
+form or a title block can be reported as a table — one CAD sheet in testing yielded
+a 12 × 2 "table" that is really the drawing's title block. Treat row and column
+counts as an interpretation; the *Text* tab shows what is actually on the page.
+
 **The drawings list or the operator listing stops before the end**
 Both are read in windows. A CAD sheet can hold hundreds of thousands of paths and
 millions of operators, so a page report inlines the first 5 000 of each and the tab

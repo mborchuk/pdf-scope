@@ -24,6 +24,7 @@ from .objects import describe_object
 from .page import analyze_page, page_content_stream_bytes, page_drawings, page_operators
 from .render import render_page_png
 from .schema import SCHEMA_VERSION, dumps
+from .summary import document_content_summary
 
 __all__ = [
     "SCHEMA_VERSION",
@@ -38,6 +39,7 @@ __all__ = [
     "build_document_bundle",
     "collect_document_json",
     "describe_object",
+    "document_content_summary",
     "document_text",
     "dumps",
     "image_preview_png",

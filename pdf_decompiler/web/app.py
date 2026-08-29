@@ -34,6 +34,8 @@ from ..core.errors import (
     PasswordRequiredError,
 )
 from ..core.schema import CONTENT_STREAM_OPERATOR_LIMIT, PAGE_DRAWING_LIMIT
+from ..core.summary import COUNT_FIELDS
+from ..core.tables import TABLE_DETECTION_PATH_GUARD
 from . import tasks
 from .jobs import ExtractionPool
 from .registry import DocumentRecord, DocumentRegistry
@@ -243,6 +245,77 @@ async def close_document(document_id: str) -> Response:
     _require(document_id)
     registry.remove(document_id)
     return _json({"closed": document_id})
+
+
+@app.get("/api/documents/{document_id}/summary")
+async def get_content_summary(
+    document_id: str,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(25, ge=1, le=200),
+    include_tables: bool = Query(True),
+) -> Response:
+    """Content counts: text, images, vector paths, tables, annotations, fields.
+
+    Counting means touching every page, and one CAD sheet can take seconds, so a
+    request counts one range and the results are cached per page for the life of
+    the document. ``totals`` and ``pages`` always cover everything counted so far,
+    so a caller walks ranges until ``pages_counted`` reaches ``page_count``.
+    """
+    record = _require_ready(document_id)
+    cached = record.summary_pages
+    wanted = range(offset, min(offset + limit, record.report["file"]["page_count"]))
+    missing = [number for number in wanted if number not in cached]
+
+    if missing:
+        try:
+            window = await pool.run(
+                tasks.task_content_summary,
+                str(record.source_path),
+                missing[0],
+                missing[-1] - missing[0] + 1,
+                include_tables,
+                record.password,
+            )
+        except PageNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=422, detail=f"content summary failed: {exc}") from exc
+        for entry in window["pages"]:
+            cached[entry["page_number"]] = entry
+        guard = window["table_detection_path_guard"]
+    else:
+        guard = TABLE_DETECTION_PATH_GUARD
+
+    # Everything counted so far, not just this window: a caller walking the
+    # document in chunks then always holds the whole picture.
+    pages = [cached[number] for number in sorted(cached)]
+    totals = dict.fromkeys(COUNT_FIELDS, 0)
+    partial: set[str] = set()
+    for entry in cached.values():
+        for field in COUNT_FIELDS:
+            value = entry.get(field)
+            if value is None:
+                partial.add(field)
+            else:
+                totals[field] += value
+
+    page_count = record.report["file"]["page_count"]
+    return _json(
+        {
+            "page_count": page_count,
+            "offset": offset,
+            "limit": limit,
+            "pages_counted": len(cached),
+            "complete": len(cached) >= page_count,
+            "pages_without_text_layer": sum(
+                1 for entry in cached.values() if entry.get("has_text_layer") is False
+            ),
+            "totals": totals,
+            "partial_totals": sorted(partial),
+            "table_detection_path_guard": guard,
+            "pages": pages,
+        }
+    )
 
 
 @app.get("/api/documents/{document_id}/report.json")

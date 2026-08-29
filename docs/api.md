@@ -10,6 +10,7 @@ generated from the code is served at `/docs`, the OpenAPI schema at
   - [POST /api/documents](#post-apidocuments)
   - [GET /api/documents](#get-apidocuments)
   - [GET /api/documents/{document_id}](#get-apidocumentsdocument_id)
+  - [GET /api/documents/{document_id}/summary](#get-apidocumentsdocument_idsummary)
   - [POST /api/documents/{document_id}/unlock](#post-apidocumentsdocument_idunlock)
   - [DELETE /api/documents/{document_id}](#delete-apidocumentsdocument_id)
   - [GET /api/documents/{document_id}/report.json](#get-apidocumentsdocument_idreportjson)
@@ -168,6 +169,46 @@ curl -s http://127.0.0.1:8000/api/documents/905d4d6dbfcc47c8b6495bd00da07213
 
 `report` is `null` until the status is `ready`. Its full shape is documented in
 [schema.md](schema.md#document-report).
+
+### GET /api/documents/{document_id}/summary
+
+How much of what is in the document: characters, words, image placements, vector
+paths, detected tables, annotations, links and form fields, per page and in total.
+
+The document report is cheap because it never touches page content. These counts
+do touch every page, and a CAD sheet takes seconds on its own, so a request counts
+one range of pages. Results are cached per page for the document's lifetime, and
+`totals` and `pages` always cover **everything counted so far** — walk ranges until
+`pages_counted` reaches `page_count`.
+
+| Query | Type | Default | Range |
+| --- | --- | --- | --- |
+| `offset` | int | `0` | ≥ 0 |
+| `limit` | int | `25` | 1–200 pages per request |
+| `include_tables` | bool | `true` | `false` skips table detection, which is the slowest part |
+
+```bash
+curl -s "http://127.0.0.1:8000/api/documents/905d…/summary?offset=0&limit=25"
+```
+
+```json
+{
+  "page_count": 64, "offset": 0, "limit": 25, "pages_counted": 25,
+  "complete": false, "pages_without_text_layer": 0,
+  "totals": {"characters": 19819, "words": 2189, "images": 25, "drawings": 889,
+             "tables": 24, "annotations": 0, "links": 0, "form_fields": 0},
+  "partial_totals": [],
+  "table_detection_path_guard": 20000,
+  "pages": [{"page_number": 0, "characters": 251, "words": 30, "images": 1,
+             "drawings": 2, "tables": 0, "annotations": 0, "links": 0,
+             "form_fields": 0, "has_text_layer": true}]
+}
+```
+
+`partial_totals` names the fields whose totals are incomplete because some page
+could not supply them — in practice `tables`, on pages above
+`table_detection_path_guard` vector paths, where detection is skipped and the
+page's `tables` is `null` with `tables_skipped: true`.
 
 ### POST /api/documents/{document_id}/unlock
 

@@ -62,6 +62,9 @@ something different.
 | Open documents | 25 | `web.registry.MAX_OPEN_DOCUMENTS` |
 | Objects scanned for the type histogram | 200 000 | `core.schema.XREF_SCAN_LIMIT` |
 | Vector paths inlined per page report | 5 000 | `core.schema.PAGE_DRAWING_LIMIT` |
+| Vector paths above which table detection is skipped | 20 000 | `core.tables.TABLE_DETECTION_PATH_GUARD` |
+| Table rows / Markdown kept per table | 300 rows, 40 000 chars | `core.tables.TABLE_ROW_LIMIT`, `TABLE_MARKDOWN_LIMIT` |
+| Pages counted per summary request | 25 (max 200) | `limit` on `/summary` |
 | Operators inlined per page report | 5 000 | `core.schema.PAGE_OPERATOR_LIMIT` |
 | Nodes per structure/name-tree walk | 5 000 | `core.objects.DEFAULT_NODE_LIMIT` |
 | Inlined decoded content stream | 200 000 chars | `core.schema.CONTENT_STREAM_INLINE_LIMIT` |

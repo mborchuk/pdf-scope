@@ -38,8 +38,11 @@ selection) lives in `pyproject.toml`.
 | Tests | `.venv/bin/python -m pytest` | `make test` |
 | One test | `.venv/bin/python -m pytest tests/test_page.py::test_images_placements_and_files -q` | — |
 | Lint | `.venv/bin/ruff check .` | `make lint` |
+| Markdown cross-links | `.venv/bin/python .github/scripts/check_links.py` | part of `make lint` |
 | Format | `.venv/bin/ruff format .` | `make format` |
 | Lint + tests | — | `make check` |
+| Vulnerability audit of the pins | `.venv/bin/pip-audit -r requirements.txt --strict` | `make audit` |
+| Install the optional pre-commit hooks | `.venv/bin/pre-commit install` | `make hooks` |
 | Remove caches and workspace | — | `make clean` |
 | End-to-end smoke test | `python .github/scripts/smoke_test.py http://127.0.0.1:8000` | — |
 
@@ -92,7 +95,7 @@ grep -n "pymupdf" pdf_scope/web/app.py ; echo "expect no matches"
 
 ## Tests
 
-29 tests, all offline, no server needed, run in well under a second.
+47 tests, all offline, no server needed, run in about a second.
 
 | File | Covers |
 | --- | --- |
@@ -100,7 +103,9 @@ grep -n "pymupdf" pdf_scope/web/app.py ; echo "expect no matches"
 | `tests/test_document.py` | Document report, metadata, fonts, outline, attachments, forms, structure sections, encryption, corrupt files |
 | `tests/test_page.py` | Text granularities and font details, images and files on disk, drawings, annotations/links/widgets, content-stream operators, resources, coordinate conversion, rotated pages, scanned pages |
 | `tests/test_objects.py` | Object descriptions, stream sizes, xref scan, page tree, reference helpers, dictionary-source parser, content-stream parser including inline images and limits |
+| `tests/test_summary.py` | Table detection geometry, headers, Markdown rendering, the vector-path guard, document and windowed content counts |
 | `tests/test_concurrency.py` | Two documents in a real process pool, artifact namespacing, export bundle contents, document text formats |
+| `tests/test_packaging.py` | `requirements*.txt` and `pyproject.toml` declare the same versions, and everything is pinned |
 
 Assertions are concrete: exact bounding boxes, exact colours, exact font names.
 That is deliberate — "returned something" would not catch a regression in
@@ -208,15 +213,31 @@ tracebacks easier to read.
 
 ## Continuous integration
 
-`.github/workflows/ci.yml` runs on push and pull request:
+`.github/workflows/ci.yml` runs on push to `main`, on every pull request, and on
+demand:
 
 | Job | What it does |
 | --- | --- |
-| `lint` | `ruff check` and `ruff format --check` |
+| `lint` | `ruff check`, `ruff format --check`, and the Markdown link check |
 | `test` | `pytest` on Python 3.10–3.14 on Linux, plus 3.12 on macOS and Windows |
 | `smoke` | Starts the server, uploads a generated PDF, checks the report, render and export, then closes the document |
+| `docker` | Builds the image, waits for the image's own health check, then runs the same smoke test *inside* the container against the shipped entry point |
 
-`.github/dependabot.yml` proposes monthly updates for pip and GitHub Actions.
+`.github/workflows/audit.yml` runs `pip-audit` over the pinned dependency set
+every Monday, on pull requests that change the pins, and on demand.
+
+The workflow token is read-only, third-party actions are pinned to commit SHAs,
+and runs on a pull-request branch cancel their own predecessors while runs on
+`main` do not.
+
+`.github/dependabot.yml` proposes weekly updates for pip, GitHub Actions and the
+Dockerfile base image. Routine minor and patch bumps are grouped per area; major
+bumps and PyMuPDF always arrive as their own pull request, because MuPDF releases
+move text segmentation, image DPI reporting and drawing decomposition.
+
+GitHub-side settings — merge strategy, security features, Actions policy — and
+the limits of the current plan are documented in
+[repository.md](repository.md).
 
 ## Release process
 

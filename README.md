@@ -143,6 +143,7 @@ Every panel is documented in [docs/ui-guide.md](docs/ui-guide.md).
 | [Configuration and operations](docs/configuration.md) | Variables, limits, performance, deployment |
 | [Troubleshooting](docs/troubleshooting.md) | Symptoms, causes, fixes |
 | [Development](docs/development.md) | Code map, tests, common tasks, releases |
+| [Repository configuration](docs/repository.md) | GitHub settings, CI and automation, going public |
 
 Also: [CHANGELOG](CHANGELOG.md) · [CONTRIBUTING](CONTRIBUTING.md) ·
 [SECURITY](SECURITY.md) · [NOTICE](NOTICE.md) ·
@@ -351,9 +352,12 @@ annotations, forms, metadata, the object model, the content-stream parser,
 rotated pages, scanned pages, encrypted and corrupt files, export bundles, and
 two documents processed concurrently without cross-contamination.
 
-`make check` runs lint and tests together. See
-[CONTRIBUTING.md](CONTRIBUTING.md) and
-[docs/development.md](docs/development.md).
+`make check` runs lint and tests together, `make audit` checks the pinned
+dependencies for known vulnerabilities, and `make hooks` installs the optional
+pre-commit hooks. CI additionally builds the container image and runs the smoke
+test inside it. See [CONTRIBUTING.md](CONTRIBUTING.md),
+[docs/development.md](docs/development.md) and
+[docs/repository.md](docs/repository.md).
 
 ## Known limitations
 

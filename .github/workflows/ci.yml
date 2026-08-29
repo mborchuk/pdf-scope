@@ -6,20 +6,31 @@ on:
   pull_request:
   workflow_dispatch:
 
+# The default token is read-only; no job here needs to write to the repository.
 permissions:
   contents: read
 
+# Superseded runs of the same branch are cancelled, except on main, where every
+# commit's result is worth keeping.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# Third-party actions are pinned to a commit SHA, not a tag: a tag can be moved
+# to different code, a SHA cannot. Dependabot keeps the pins current and the
+# trailing comment records which release each SHA is.
 jobs:
   lint:
     name: Lint and format
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
           cache: pip
@@ -29,10 +40,15 @@ jobs:
         run: ruff check --output-format=github .
       - name: Ruff format check
         run: ruff format --check .
+      - name: Markdown cross-links resolve
+        run: python .github/scripts/check_links.py
 
   test:
     name: Tests (${{ matrix.os }}, Python ${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -44,8 +60,10 @@ jobs:
           - os: windows-latest
             python-version: "3.12"
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
@@ -57,9 +75,14 @@ jobs:
   smoke:
     name: Server smoke test
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
           cache: pip
@@ -74,3 +97,39 @@ jobs:
           done
       - name: Upload a generated PDF and check the extraction
         run: python .github/scripts/smoke_test.py http://127.0.0.1:8099
+
+  docker:
+    name: Container image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build the image
+        run: docker build --tag pdf-scope:ci .
+      - name: Start the container
+        run: docker run --detach --name pdf-scope-ci --publish 127.0.0.1:8099:8000 pdf-scope:ci
+      - name: Wait for the image's own health check to pass
+        run: |
+          for _ in $(seq 1 45); do
+            status=$(docker inspect --format '{{.State.Health.Status}}' pdf-scope-ci)
+            case "$status" in
+              healthy) echo "healthy"; exit 0 ;;
+              unhealthy) echo "container reported unhealthy"; exit 1 ;;
+            esac
+            sleep 2
+          done
+          echo "health check did not pass in time"; exit 1
+      # The smoke test runs inside the container, against the server's own
+      # loopback address: it needs PyMuPDF, which the image already has, and it
+      # exercises the shipped entry point rather than a runner-local install.
+      - name: Extract a PDF through the running container
+        run: |
+          docker cp .github/scripts/smoke_test.py pdf-scope-ci:/tmp/smoke_test.py
+          docker exec pdf-scope-ci python /tmp/smoke_test.py http://127.0.0.1:8000
+      - name: Container log
+        if: always()
+        run: docker logs pdf-scope-ci

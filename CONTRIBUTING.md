@@ -48,6 +48,12 @@ python3 -m venv .venv
 Python 3.10 or newer. PyMuPDF is pinned to an exact version in
 `requirements.txt` and `pyproject.toml`; if you change it, update both, plus
 the version numbers in `README.md`, `NOTICE.md` and `docs/`.
+`tests/test_packaging.py` fails if those two files disagree, so the sync is
+checked rather than remembered.
+
+Optionally, `make hooks` installs the pre-commit hooks in
+`.pre-commit-config.yaml`: the same Ruff checks CI runs, plus a few hygiene
+checks, before each commit. CI is the authority either way.
 
 ## Everyday commands
 

@@ -5,18 +5,20 @@ PIP := $(VENV)/bin/pip
 PORT ?= 8000
 IMAGE ?= pdf-scope
 
-.PHONY: help venv install install-dev run dev docker-build docker-run test lint format check clean
+.PHONY: help venv install install-dev hooks run dev docker-build docker-run test lint format audit check clean
 
 help:
 	@echo "make install      create .venv and install runtime dependencies"
 	@echo "make install-dev  also install pytest and ruff"
+	@echo "make hooks        install the optional pre-commit hooks"
 	@echo "make run          start the server on http://127.0.0.1:$(PORT)"
 	@echo "make dev          start the server with auto-reload"
 	@echo "make docker-build build the container image ($(IMAGE))"
 	@echo "make docker-run   run the image, published on 127.0.0.1:$(PORT) only"
 	@echo "make test         run the test suite"
-	@echo "make lint         ruff check + ruff format --check"
+	@echo "make lint         ruff check + ruff format --check + Markdown link check"
 	@echo "make format       apply ruff format and fixable lint rules"
+	@echo "make audit        check the pinned dependencies for known vulnerabilities"
 	@echo "make check        lint and test"
 	@echo "make clean        remove caches, build output and the workspace"
 
@@ -30,6 +32,12 @@ install: venv
 install-dev: venv
 	$(PIP) install -q --upgrade pip
 	$(PIP) install -r requirements-dev.txt
+
+# Optional: the same Ruff checks CI runs, on every commit. pre-commit is not in
+# requirements-dev.txt because nothing in the project needs it.
+hooks: venv
+	$(PIP) install -q pre-commit
+	$(VENV)/bin/pre-commit install
 
 run:
 	$(PY) -m pdf_scope --port $(PORT)
@@ -53,10 +61,17 @@ test:
 lint:
 	$(VENV)/bin/ruff check .
 	$(VENV)/bin/ruff format --check .
+	$(PY) .github/scripts/check_links.py
 
 format:
 	$(VENV)/bin/ruff format .
 	$(VENV)/bin/ruff check --fix .
+
+# Same check as .github/workflows/audit.yml. Needs network access to the PyPI
+# advisory database.
+audit: venv
+	$(PIP) install -q -r requirements-audit.txt
+	$(VENV)/bin/pip-audit -r requirements.txt -r requirements-dev.txt --strict
 
 check: lint test
 

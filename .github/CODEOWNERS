@@ -1,0 +1,4 @@
+# Every path has one owner. Review requests are addressed automatically, and
+# once branch protection is available (see docs/repository.md), a rule can
+# require this owner's review before merge.
+* @mborchuk

@@ -1,13 +1,59 @@
 version: 2
+
+# Weekly, grouped, and labelled. The groups exist so that routine minor and
+# patch bumps arrive as one reviewable pull request per area instead of one per
+# package; major bumps and PyMuPDF always arrive alone, because they need the
+# test suite read rather than skimmed.
 updates:
   - package-ecosystem: pip
     directory: "/"
     schedule:
-      interval: monthly
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Etc/UTC
     open-pull-requests-limit: 5
-    labels: ["dependencies"]
+    labels: ["dependencies", "python"]
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      # PyMuPDF is absent from every group on purpose: MuPDF releases shift text
+      # segmentation, image DPI reporting and drawing decomposition, so its
+      # bumps get their own pull request and their own test run.
+      web-stack:
+        applies-to: version-updates
+        patterns: ["fastapi", "uvicorn", "python-multipart"]
+        update-types: ["minor", "patch"]
+      dev-tools:
+        applies-to: version-updates
+        patterns: ["pytest*", "ruff", "pip-audit"]
+        update-types: ["minor", "patch"]
+
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
-      interval: monthly
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
     labels: ["dependencies", "ci"]
+    commit-message:
+      prefix: "chore(ci)"
+    groups:
+      github-actions:
+        patterns: ["*"]
+
+  # The Dockerfile's base image. Without this, a stale python:3.13-slim would
+  # keep shipping old OpenSSL and zlib in the image.
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 3
+    labels: ["dependencies", "docker"]
+    commit-message:
+      prefix: "chore(docker)"

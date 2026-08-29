@@ -1,0 +1,31 @@
+# Line endings are normalised to LF in the repository and in the working tree on
+# every platform. The test matrix includes Windows, and without this a CRLF
+# checkout can reach the Linux formatter as a diff.
+* text=auto eol=lf
+
+*.py    text diff=python
+*.md    text diff=markdown
+*.html  text diff=html
+*.css   text
+*.js    text
+*.json  text
+*.yml   text
+*.toml  text
+
+# Binary formats: never diffed, never line-ending-converted. PDFs are listed
+# even though none are committed (fixtures are generated), so an accidental one
+# does not arrive mangled.
+*.pdf   binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.zip   binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.otf   binary
+
+# Language statistics describe the application, not its prose.
+docs/**         linguist-documentation
+*.md            linguist-documentation
+.github/**      linguist-vendored

@@ -2,7 +2,7 @@
 
 The UI is a single page served at `/`. No build step, no external assets: one
 HTML file, one CSS file, one JavaScript file, all in
-`pdf_decompiler/web/static/`.
+`pdf_scope/web/static/`.
 
 - [Layout](#layout)
 - [Top bar](#top-bar)
@@ -31,7 +31,7 @@ HTML file, one CSS file, one JavaScript file, all in
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│ PDF decompiler        [Open PDFs] [Download everything] pool status   │
+│ PDF Scope        [Open PDFs] [Download everything] pool status   │
 ├───────────────┬──────────────────────────────────────────────────────┤
 │ Documents     │ file.pdf · PDF 1.7 · 4 pages · 11 KB · sha256 … · id  │
 │ ┌───────────┐ │            [Document JSON] [.txt] [.md] [Images] […]  │
@@ -357,6 +357,13 @@ component, format, filters, SMask, stored size.
 Every placement on the page gets its own card, including several placements of
 the same xref and images that overlap each other, so nothing is hidden.
 
+**When the page draws vector paths, the tab says so.** A picture is not
+necessarily an image: logos, signs and diagrams are often filled paths, which have
+no image bytes and therefore no card here. The notice names the path count and
+points at the *Drawings* overlay, so a page that looks like it has six pictures but
+lists one image explains itself. The page summary in the details panel makes the
+same point when a page draws more paths than it places images.
+
 **Thumbnails are PNG re-encodes, downloads are not.** Images are stored in the
 format the PDF used, and scanned files often use JPEG 2000, JBIG2 or CCITT,
 which browsers cannot draw. Thumbnails therefore come from
@@ -482,7 +489,7 @@ characters of the document id, so several open documents never collide:
 | Image | `invoice_2024--905d4d6d--image-xref11.png` |
 | Attachment | `invoice_2024--905d4d6d--data.csv` |
 | Bundle | `invoice_2024--905d4d6d--extraction.zip` |
-| All documents | `pdf-decompiler-export.zip` |
+| All documents | `pdf-scope-export.zip` |
 
 The prefix is sanitised: only letters, digits, dot, underscore and hyphen
 survive, truncated to 60 characters.

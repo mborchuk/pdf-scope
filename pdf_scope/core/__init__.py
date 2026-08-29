@@ -3,7 +3,7 @@
 This package has no web-framework dependency. It can be imported, tested and
 scripted on its own::
 
-    from pdf_decompiler.core import analyze_document, analyze_page
+    from pdf_scope.core import analyze_document, analyze_page
 
     report = analyze_document("file.pdf")
     page = analyze_page("file.pdf", 0)
@@ -16,7 +16,7 @@ from .errors import (
     ObjectNotFoundError,
     PageNotFoundError,
     PasswordRequiredError,
-    PdfDecompilerError,
+    PdfScopeError,
 )
 from .export import build_document_bundle, collect_document_json, document_text
 from .images import image_preview_png
@@ -33,7 +33,7 @@ __all__ = [
     "ObjectNotFoundError",
     "PageNotFoundError",
     "PasswordRequiredError",
-    "PdfDecompilerError",
+    "PdfScopeError",
     "analyze_document",
     "analyze_page",
     "build_document_bundle",

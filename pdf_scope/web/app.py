@@ -7,7 +7,7 @@ FastAPI's async endpoints combine directly with a ``ProcessPoolExecutor``
 box, and it needs no extra machinery beyond uvicorn.
 
 This module contains no PDF logic: every PDF operation is a call into
-``pdf_decompiler.core`` executed in a worker process.
+``pdf_scope.core`` executed in a worker process.
 """
 
 from __future__ import annotations
@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import io
 import json
+import mimetypes
 import os
 import zipfile
 from contextlib import asynccontextmanager
@@ -43,11 +44,11 @@ from .registry import DocumentRecord, DocumentRegistry
 STATIC_DIR = Path(__file__).parent / "static"
 
 #: Uploads larger than this are rejected outright (local tool, sane ceiling).
-MAX_UPLOAD_BYTES = int(os.environ.get("PDF_DECOMPILER_MAX_UPLOAD_MB", "512")) * 1024 * 1024
+MAX_UPLOAD_BYTES = int(os.environ.get("PDF_SCOPE_MAX_UPLOAD_MB", "512")) * 1024 * 1024
 
 
 def workspace_dir() -> Path:
-    configured = os.environ.get("PDF_DECOMPILER_WORKSPACE")
+    configured = os.environ.get("PDF_SCOPE_WORKSPACE")
     if configured:
         return Path(configured).expanduser().resolve()
     return Path.cwd() / ".workspace"
@@ -68,7 +69,7 @@ async def lifespan(app: FastAPI):
         pool.shutdown()
 
 
-app = FastAPI(title="PDF decompiler", version=SCHEMA_VERSION, lifespan=lifespan)
+app = FastAPI(title="PDF Scope", version=SCHEMA_VERSION, lifespan=lifespan)
 
 
 # --------------------------------------------------------------------------- #
@@ -732,7 +733,7 @@ async def download_all_bundles() -> Response:
     return Response(
         content=buffer.getvalue(),
         media_type="application/zip",
-        headers={"Content-Disposition": 'attachment; filename="pdf-decompiler-export.zip"'},
+        headers={"Content-Disposition": 'attachment; filename="pdf-scope-export.zip"'},
     )
 
 
@@ -758,5 +759,12 @@ async def status() -> Response:
 async def index() -> HTMLResponse:
     return HTMLResponse((STATIC_DIR / "index.html").read_text("utf-8"))
 
+
+# Python's mimetypes only learns the webfont types from the platform's mime
+# database, which a slim container image does not have: the vendored .woff2 files
+# would then be served as text/plain. Register them so the UI is served correctly
+# whatever the interpreter and image.
+mimetypes.add_type("font/woff2", ".woff2")
+mimetypes.add_type("font/woff", ".woff")
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")

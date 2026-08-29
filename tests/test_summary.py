@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pymupdf
 
-from pdf_decompiler.core import analyze_page, document_content_summary
-from pdf_decompiler.core.tables import TABLE_DETECTION_PATH_GUARD, extract_tables
+from pdf_scope.core import analyze_page, document_content_summary
+from pdf_scope.core.tables import TABLE_DETECTION_PATH_GUARD, extract_tables
 
 
 def test_tables_are_detected_with_geometry_and_markdown(table_pdf: Path) -> None:

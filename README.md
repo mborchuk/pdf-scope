@@ -1,6 +1,6 @@
-# PDF decompiler
+# PDF Scope
 
-[![CI](https://github.com/mv-borchuk/pdf-decompiler/actions/workflows/ci.yml/badge.svg)](https://github.com/mv-borchuk/pdf-decompiler/actions/workflows/ci.yml)
+[![CI](https://github.com/mborchuk/pdf-scope/actions/workflows/ci.yml/badge.svg)](https://github.com/mborchuk/pdf-scope/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![PyMuPDF 1.28.2](https://img.shields.io/badge/PyMuPDF-1.28.2-informational.svg)](https://github.com/pymupdf/pymupdf)
@@ -81,11 +81,24 @@ python3 -m venv .venv
 ```
 
 ```bash
-.venv/bin/python -m pdf_decompiler
+.venv/bin/python -m pdf_scope
 ```
 
 Open <http://127.0.0.1:8000>. Options: `--host`, `--port`, `--reload`.
 `make install` and `make run` do the same.
+
+Or in Docker, with no Python on the host:
+
+```bash
+docker build --load -t pdf-scope .
+docker run --rm -p 127.0.0.1:8000:8000 pdf-scope
+```
+
+`make docker-build` and `make docker-run` wrap those. **Keep the published port
+on `127.0.0.1`**: the app has no authentication, so binding every interface with
+`-p 8000:8000` would let anyone who can reach the machine upload files and read
+every open document. Details, volumes and environment variables:
+[docs/configuration.md](docs/configuration.md#running-with-docker).
 
 Full walkthrough: [docs/getting-started.md](docs/getting-started.md).
 
@@ -93,7 +106,7 @@ Full walkthrough: [docs/getting-started.md](docs/getting-started.md).
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│ PDF decompiler        [Open PDFs] [Download everything] pool status   │
+│ PDF Scope        [Open PDFs] [Download everything] pool status   │
 ├───────────────┬──────────────────────────────────────────────────────┤
 │ Documents     │ file.pdf · PDF 1.7 · 4 pages · 11 KB · sha256 … · id  │
 │ ┌───────────┐ │            [Document JSON] [.txt] [.md] [Images] […]  │
@@ -140,11 +153,11 @@ Also: [CHANGELOG](CHANGELOG.md) · [CONTRIBUTING](CONTRIBUTING.md) ·
 ```mermaid
 flowchart LR
     U["Browser UI<br/>static HTML + vanilla JS"]
-    A["FastAPI app<br/>pdf_decompiler.web.app"]
+    A["FastAPI app<br/>pdf_scope.web.app"]
     R["Document registry<br/>ids, status, lifecycle"]
     P["ExtractionPool<br/>ProcessPoolExecutor"]
-    W["Worker process<br/>pdf_decompiler.web.tasks"]
-    C["Extraction core<br/>pdf_decompiler.core"]
+    W["Worker process<br/>pdf_scope.web.tasks"]
+    C["Extraction core<br/>pdf_scope.core"]
     M["PyMuPDF / MuPDF"]
     F[("Workspace on disk<br/>source.pdf, images/,<br/>cache/, exports/")]
 
@@ -163,7 +176,7 @@ flowchart LR
 
 Three choices worth knowing up front:
 
-- **The extraction core has no web dependency.** `pdf_decompiler.core` takes a
+- **The extraction core has no web dependency.** `pdf_scope.core` takes a
   file path and returns JSON-serialisable data; it is importable, testable and
   scriptable on its own.
 - **All PDF work runs in worker processes.** PyMuPDF's documentation states it
@@ -244,7 +257,7 @@ Reported in every document report, in the UI's **Not extractable** tab, and in
   (`source.pdf`, `images/`, `cache/`, `exports/`), and each extraction opens
   its own PyMuPDF document.
 - **Concurrency** — analyses run in parallel in the process pool
-  (`PDF_DECOMPILER_WORKERS`, default `min(4, CPU)`), with a semaphore queueing
+  (`PDF_SCOPE_WORKERS`, default `min(4, CPU)`), with a semaphore queueing
   the rest. The event loop never blocks.
 - **Failure containment** — a corrupt or locked file is marked in the list;
   every other document keeps working.
@@ -289,7 +302,7 @@ Interactive docs at `/docs`. Full reference with examples:
 ## Use the core without the UI
 
 ```python
-from pdf_decompiler.core import analyze_document, analyze_page, dumps
+from pdf_scope.core import analyze_document, analyze_page, dumps
 
 report = analyze_document("contract.pdf")
 print(report["file"]["pdf_version"], report["file"]["page_count"])
@@ -311,9 +324,9 @@ Also available: `build_document_bundle`, `collect_document_json`,
 
 | Variable | Default | Effect |
 | --- | --- | --- |
-| `PDF_DECOMPILER_WORKSPACE` | `./.workspace` | Where artifacts live; emptied on every start |
-| `PDF_DECOMPILER_WORKERS` | `min(4, CPU count)` | Worker processes, i.e. simultaneous extractions |
-| `PDF_DECOMPILER_MAX_UPLOAD_MB` | `512` | Per-file upload ceiling |
+| `PDF_SCOPE_WORKSPACE` | `./.workspace` | Where artifacts live; emptied on every start |
+| `PDF_SCOPE_WORKERS` | `min(4, CPU count)` | Worker processes, i.e. simultaneous extractions |
+| `PDF_SCOPE_MAX_UPLOAD_MB` | `512` | Per-file upload ceiling |
 
 More, including built-in limits, performance figures and deployment notes:
 [docs/configuration.md](docs/configuration.md).

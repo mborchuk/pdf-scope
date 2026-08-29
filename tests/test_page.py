@@ -7,15 +7,15 @@ from pathlib import Path
 
 import pytest
 
-from pdf_decompiler.core import (
+from pdf_scope.core import (
     analyze_page,
     image_preview_png,
     page_drawings,
     page_operators,
     render_page_png,
 )
-from pdf_decompiler.core.coordinates import rect_to_pdf_space
-from pdf_decompiler.core.errors import ObjectNotFoundError
+from pdf_scope.core.coordinates import rect_to_pdf_space
+from pdf_scope.core.errors import ObjectNotFoundError
 
 
 def test_text_granularities_and_font_details(rich_pdf: Path) -> None:
@@ -24,9 +24,9 @@ def test_text_granularities_and_font_details(rich_pdf: Path) -> None:
 
     text = page["text"]
     assert text["has_text_layer"] is True
-    assert "Hello decompiler" in text["plain"]
+    assert "Hello pdf scope" in text["plain"]
     assert any("Hello" in block["text"] for block in text["blocks"])
-    assert any(word["text"] == "decompiler" for word in text["words"])
+    assert any(word["text"] == "scope" for word in text["words"])
 
     spans = [
         span

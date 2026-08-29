@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from pdf_decompiler.core import describe_object, open_document
-from pdf_decompiler.core.contentstream import parse_content_stream
-from pdf_decompiler.core.errors import ObjectNotFoundError
-from pdf_decompiler.core.objects import (
+from pdf_scope.core import describe_object, open_document
+from pdf_scope.core.contentstream import parse_content_stream
+from pdf_scope.core.errors import ObjectNotFoundError
+from pdf_scope.core.objects import (
     find_references,
     page_tree,
     parse_dict_source,

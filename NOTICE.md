@@ -1,6 +1,6 @@
 # Third-party notices
 
-The PDF decompiler source in this repository is released under the MIT licence
+The PDF Scope source in this repository is released under the MIT licence
 (see [LICENSE](LICENSE)). It depends on third-party packages that carry their
 own licences. The most important one is **PyMuPDF**, which is **not**
 permissively licensed.
@@ -58,6 +58,6 @@ Artifex about a commercial licence.
 ## Assets
 
 The user interface ships no third-party fonts, icons, images or JavaScript
-libraries. `pdf_decompiler/web/static/` contains only hand-written HTML, CSS
+libraries. `pdf_scope/web/static/` contains only hand-written HTML, CSS
 and JavaScript from this repository, and the pages it renders come from the
 user's own files.

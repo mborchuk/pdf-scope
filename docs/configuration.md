@@ -16,7 +16,7 @@
 ## Command line
 
 ```bash
-.venv/bin/python -m pdf_decompiler [--host HOST] [--port PORT] [--reload]
+.venv/bin/python -m pdf_scope [--host HOST] [--port PORT] [--reload]
 ```
 
 | Option | Default | Notes |
@@ -29,24 +29,24 @@ To run uvicorn yourself (extra workers are **not** appropriate here — see
 [Performance](#performance)):
 
 ```bash
-.venv/bin/uvicorn pdf_decompiler.web.app:app --host 127.0.0.1 --port 8000
+.venv/bin/uvicorn pdf_scope.web.app:app --host 127.0.0.1 --port 8000
 ```
 
 ## Environment variables
 
 | Variable | Default | Effect |
 | --- | --- | --- |
-| `PDF_DECOMPILER_WORKSPACE` | `<cwd>/.workspace` | Directory for per-document artifacts. Expanded and resolved at startup. **Emptied on every start** |
-| `PDF_DECOMPILER_WORKERS` | `min(4, os.cpu_count())` | Worker processes, and therefore the maximum number of simultaneous extractions |
-| `PDF_DECOMPILER_MAX_UPLOAD_MB` | `512` | Per-file upload ceiling; larger files are rejected with a message |
+| `PDF_SCOPE_WORKSPACE` | `<cwd>/.workspace` | Directory for per-document artifacts. Expanded and resolved at startup. **Emptied on every start** |
+| `PDF_SCOPE_WORKERS` | `min(4, os.cpu_count())` | Worker processes, and therefore the maximum number of simultaneous extractions |
+| `PDF_SCOPE_MAX_UPLOAD_MB` | `512` | Per-file upload ceiling; larger files are rejected with a message |
 
 Example:
 
 ```bash
-PDF_DECOMPILER_WORKSPACE=/var/tmp/pdfd \
-PDF_DECOMPILER_WORKERS=8 \
-PDF_DECOMPILER_MAX_UPLOAD_MB=1024 \
-.venv/bin/python -m pdf_decompiler --port 8080
+PDF_SCOPE_WORKSPACE=/var/tmp/pdfd \
+PDF_SCOPE_WORKERS=8 \
+PDF_SCOPE_MAX_UPLOAD_MB=1024 \
+.venv/bin/python -m pdf_scope --port 8080
 ```
 
 Because the workspace is wiped at startup, never point it at a directory that
@@ -116,7 +116,7 @@ What dominates:
 
 Tuning:
 
-- Raise `PDF_DECOMPILER_WORKERS` on a many-core machine when several documents
+- Raise `PDF_SCOPE_WORKERS` on a many-core machine when several documents
   are analysed at once. It does not speed up a single page.
 - Lower the zoom in the UI to render fewer pixels.
 - Turn off the *Characters* overlay on text-heavy pages; it is the only overlay
@@ -127,7 +127,7 @@ Tuning:
   count itself does not cost anything.
 - Do **not** run uvicorn with `--workers N`: each OS worker would get its own
   in-memory registry, so documents would appear and disappear depending on
-  which worker answered. Scale with `PDF_DECOMPILER_WORKERS` instead.
+  which worker answered. Scale with `PDF_SCOPE_WORKERS` instead.
 
 ## Resource sizing
 
@@ -151,10 +151,10 @@ server {
     listen 443 ssl;
     server_name pdf.internal.example;
 
-    auth_basic           "pdf decompiler";
+    auth_basic           "pdf scope";
     auth_basic_user_file /etc/nginx/htpasswd;
 
-    client_max_body_size 512m;          # match PDF_DECOMPILER_MAX_UPLOAD_MB
+    client_max_body_size 512m;          # match PDF_SCOPE_MAX_UPLOAD_MB
 
     location / {
         proxy_pass         http://127.0.0.1:8000;
@@ -172,28 +172,60 @@ through PyMuPDF — see [NOTICE.md](../NOTICE.md).
 
 ## Running with Docker
 
-No image is published; a minimal one is three lines:
-
-```dockerfile
-FROM python:3.12-slim
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY pdf_decompiler ./pdf_decompiler
-ENV PDF_DECOMPILER_WORKSPACE=/data
-VOLUME /data
-EXPOSE 8000
-CMD ["python", "-m", "pdf_decompiler", "--host", "0.0.0.0", "--port", "8000"]
-```
+The repository ships a [`Dockerfile`](../Dockerfile). No image is published, so
+build it yourself:
 
 ```bash
-docker build -t pdf-decompiler .
-docker run --rm -p 127.0.0.1:8000:8000 pdf-decompiler
+docker build --load -t pdf-scope .
+docker run --rm -p 127.0.0.1:8000:8000 pdf-scope
 ```
 
-Publish the port to `127.0.0.1` only, unless you have added authentication.
-`--host 0.0.0.0` inside the container is required for the port mapping to
-work; it is the published address that matters.
+Then open <http://127.0.0.1:8000>.
+
+`--load` puts the built image in the local image store. With the classic builder
+that is the default and the flag is harmless; with a container-driver `buildx`
+builder — what Docker Desktop often selects — leaving it out means the image stays
+in the build cache and `docker run` then fails with "image not found".
+
+**Publish the port to `127.0.0.1` only.** The application has no authentication,
+so `-p 8000:8000` — which binds every interface — hands anyone who can reach the
+machine the ability to upload files and read every open document. The container
+itself must listen on `0.0.0.0` for a port mapping to work at all, which is why
+that is the default command; what matters is the published address on the host.
+
+What the image does:
+
+| Choice | Detail |
+| --- | --- |
+| Base | `python:3.13-slim`, two stages: dependencies and the package are installed into `/opt/venv` in the build stage, and only that virtual environment is copied into the runtime stage. No compiler, no pip cache, no dev tooling. ~234 MB |
+| User | Unprivileged `pdfscope` (uid 10001) |
+| Entrypoint | The `pdf-scope` console script, so `docker run … --port 9000 --reload` works as on the host |
+| Workspace | `PDF_SCOPE_WORKSPACE=/data/workspace`, declared as a volume |
+| Health | `HEALTHCHECK` polling `GET /api/status` |
+
+Useful invocations:
+
+```bash
+# keep the extracted artifacts on the host, e.g. to inspect them directly
+docker run --rm -p 127.0.0.1:8000:8000 -v "$PWD/workspace:/data/workspace" pdf-scope
+
+# tune the pool and the upload ceiling
+docker run --rm -p 127.0.0.1:8000:8000 \
+  -e PDF_SCOPE_WORKERS=6 -e PDF_SCOPE_MAX_UPLOAD_MB=1024 pdf-scope
+
+# a different port, passed straight to the app
+docker run --rm -p 127.0.0.1:9000:9000 pdf-scope --host 0.0.0.0 --port 9000
+```
+
+Two container-specific notes:
+
+- **Workers follow the container's CPU allowance**, because the default is
+  `min(4, cpu_count())`. A container limited to two CPUs runs two workers; set
+  `PDF_SCOPE_WORKERS` explicitly if you want a different number.
+- **The workspace is still emptied on every start**, so a restart of the
+  container discards the open-document list exactly as a restart on the host
+  does. The volume is for inspecting artifacts while it runs, not for
+  persistence.
 
 ## Running as a service
 
@@ -201,13 +233,13 @@ systemd user unit, for a machine where you want it always available locally:
 
 ```ini
 [Unit]
-Description=PDF decompiler
+Description=PDF Scope
 After=network.target
 
 [Service]
-WorkingDirectory=%h/pdf-decompiler
-Environment=PDF_DECOMPILER_WORKSPACE=%h/.cache/pdf-decompiler
-ExecStart=%h/pdf-decompiler/.venv/bin/python -m pdf_decompiler --port 8000
+WorkingDirectory=%h/pdf-scope
+Environment=PDF_SCOPE_WORKSPACE=%h/.cache/pdf-scope
+ExecStart=%h/pdf-scope/.venv/bin/python -m pdf_scope --port 8000
 Restart=on-failure
 
 [Install]

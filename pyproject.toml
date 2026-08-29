@@ -1,7 +1,7 @@
 [project]
-name = "pdf-decompiler"
+name = "pdf-scope"
 version = "0.1.0"
-description = "Decompile PDF files: expose the full object model, contents and coordinates in a local web UI."
+description = "Inspect PDF files: expose the full object model, contents and coordinates in a local web UI."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
@@ -27,13 +27,13 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/mv-borchuk/pdf-decompiler"
-Documentation = "https://github.com/mv-borchuk/pdf-decompiler/tree/main/docs"
-Changelog = "https://github.com/mv-borchuk/pdf-decompiler/blob/main/CHANGELOG.md"
-Issues = "https://github.com/mv-borchuk/pdf-decompiler/issues"
+Homepage = "https://github.com/mborchuk/pdf-scope"
+Documentation = "https://github.com/mborchuk/pdf-scope/tree/main/docs"
+Changelog = "https://github.com/mborchuk/pdf-scope/blob/main/CHANGELOG.md"
+Issues = "https://github.com/mborchuk/pdf-scope/issues"
 
 [project.scripts]
-pdf-decompiler = "pdf_decompiler.__main__:main"
+pdf-scope = "pdf_scope.__main__:main"
 
 [project.optional-dependencies]
 dev = ["pytest==8.4.2", "ruff==0.14.4"]
@@ -43,10 +43,10 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["pdf_decompiler*"]
+include = ["pdf_scope*"]
 
 [tool.setuptools.package-data]
-"pdf_decompiler.web" = ["static/*"]
+"pdf_scope.web" = ["static/*"]
 
 [tool.ruff]
 line-length = 100

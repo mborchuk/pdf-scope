@@ -18,7 +18,7 @@ from .schema import dumps
 
 ProgressCallback = Callable[[int, int], None]
 
-BUNDLE_README = """PDF decompiler export
+BUNDLE_README = """PDF Scope export
 =====================
 
 document.json           Document level report: identity, file structure, metadata,

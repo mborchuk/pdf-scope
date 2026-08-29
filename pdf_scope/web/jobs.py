@@ -23,7 +23,7 @@ T = TypeVar("T")
 
 def default_worker_count() -> int:
     """Worker count: overridable, otherwise a small share of the CPUs."""
-    configured = os.environ.get("PDF_DECOMPILER_WORKERS")
+    configured = os.environ.get("PDF_SCOPE_WORKERS")
     if configured and configured.isdigit() and int(configured) > 0:
         return int(configured)
     return max(1, min(4, (os.cpu_count() or 2)))

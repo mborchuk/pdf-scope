@@ -18,11 +18,11 @@
 ```mermaid
 flowchart LR
     U["Browser UI<br/>static HTML + vanilla JS"]
-    A["FastAPI app<br/>pdf_decompiler.web.app"]
+    A["FastAPI app<br/>pdf_scope.web.app"]
     R["Document registry<br/>ids, status, lifecycle"]
     P["ExtractionPool<br/>ProcessPoolExecutor"]
-    W["Worker process<br/>pdf_decompiler.web.tasks"]
-    C["Extraction core<br/>pdf_decompiler.core"]
+    W["Worker process<br/>pdf_scope.web.tasks"]
+    C["Extraction core<br/>pdf_scope.core"]
     M["PyMuPDF / MuPDF"]
     F[("Workspace on disk<br/>source.pdf, images/,<br/>cache/, exports/")]
 
@@ -52,9 +52,9 @@ Three moving parts:
 
 | Layer | Package | May import | Must never import |
 | --- | --- | --- | --- |
-| Core | `pdf_decompiler.core` | `pymupdf`, stdlib | anything web, anything from `pdf_decompiler.web` |
-| Web | `pdf_decompiler.web` | `fastapi`, `uvicorn`, `pdf_decompiler.core` | `pymupdf` (directly, in `app.py`) |
-| UI | `pdf_decompiler/web/static` | nothing — no build step, no CDN | any external asset |
+| Core | `pdf_scope.core` | `pymupdf`, stdlib | anything web, anything from `pdf_scope.web` |
+| Web | `pdf_scope.web` | `fastapi`, `uvicorn`, `pdf_scope.core` | `pymupdf` (directly, in `app.py`) |
+| UI | `pdf_scope/web/static` | nothing — no build step, no CDN | any external asset |
 
 Two consequences that keep the codebase honest:
 
@@ -62,19 +62,19 @@ Two consequences that keep the codebase honest:
   server; see [core-api.md](core-api.md)).
 - Swapping the web framework, or adding a CLI, touches no extraction code.
 
-`pdf_decompiler/web/tasks.py` is the single exception zone: it imports the core
+`pdf_scope/web/tasks.py` is the single exception zone: it imports the core
 and runs inside worker processes. It contains no logic beyond argument
 plumbing, so the boundary stays one file thick.
 
 ## Module map
 
 ```
-pdf_decompiler/
+pdf_scope/
 ├── __init__.py            version
-├── __main__.py            `python -m pdf_decompiler` → uvicorn
+├── __main__.py            `python -m pdf_scope` → uvicorn
 ├── core/                  EXTRACTION CORE — pure Python, no web dependency
 │   ├── __init__.py        public surface re-exported for scripting
-│   ├── errors.py          PdfDecompilerError hierarchy; no PyMuPDF exception escapes
+│   ├── errors.py          PdfScopeError hierarchy; no PyMuPDF exception escapes
 │   ├── schema.py          SCHEMA_VERSION, size limits, jsonable(), dumps()
 │   ├── coordinates.py     coordinate conventions, rect/matrix helpers, PDF-space conversion
 │   ├── document.py        open/authenticate, document report, permissions, fonts, forms,
@@ -143,7 +143,7 @@ flowchart LR
     W1 & W2 & W3 & W4 -. "open own Document,<br/>close before returning" .-> D[("PDF files on disk")]
 ```
 
-- One `ProcessPoolExecutor`, sized `PDF_DECOMPILER_WORKERS` or
+- One `ProcessPoolExecutor`, sized `PDF_SCOPE_WORKERS` or
   `min(4, cpu_count())`.
 - `ExtractionPool.run()` acquires a semaphore of the same size, so queued work
   waits instead of piling up.
@@ -239,7 +239,7 @@ sequenceDiagram
 ## State and storage
 
 ```
-<workspace>/                      default ./.workspace, override with PDF_DECOMPILER_WORKSPACE
+<workspace>/                      default ./.workspace, override with PDF_SCOPE_WORKSPACE
 └── <document_id>/                32-char hex UUID, one per open document
     ├── source.pdf                the uploaded bytes, verbatim
     ├── images/                   image-xref<N>.<ext>, image-inline-p<page>-<n>.<ext>

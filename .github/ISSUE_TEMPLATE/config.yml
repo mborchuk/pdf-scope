@@ -1,7 +1,7 @@
 blank_issues_enabled: true
 contact_links:
   - name: Security vulnerability
-    url: https://github.com/mv-borchuk/pdf-decompiler/security/advisories/new
+    url: https://github.com/mborchuk/pdf-scope/security/advisories/new
     about: Report privately through a GitHub security advisory. Do not open a public issue.
   - name: PyMuPDF questions
     url: https://github.com/pymupdf/pymupdf/discussions

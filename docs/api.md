@@ -116,7 +116,7 @@ curl -s -X POST http://127.0.0.1:8000/api/documents \
 ```
 
 `rejected` lists files that were not accepted at all, each with a reason:
-oversized (see `PDF_DECOMPILER_MAX_UPLOAD_MB`) or the open-document limit
+oversized (see `PDF_SCOPE_MAX_UPLOAD_MB`) or the open-document limit
 reached. A file that uploads fine but fails to parse is **not** rejected here —
 it is created and later marked `status: "error"`.
 
@@ -537,7 +537,7 @@ of aborting the archive.
   "schema_version": "1.0",
   "documents_open": 3,
   "max_documents": 25,
-  "workspace": "/home/you/pdf-decompiler/.workspace",
+  "workspace": "/home/you/pdf-scope/.workspace",
   "pool": { "workers": 4, "running": 0, "started": true }
 }
 ```

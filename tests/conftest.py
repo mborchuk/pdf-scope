@@ -34,7 +34,7 @@ def rich_pdf(tmp_path_factory: pytest.TempPathFactory) -> Path:
     doc = pymupdf.open()
 
     page = doc.new_page(width=400, height=500)
-    page.insert_text((72, 100), "Hello decompiler", fontname="helv", fontsize=14)
+    page.insert_text((72, 100), "Hello pdf scope", fontname="helv", fontsize=14)
     page.insert_text((72, 140), "second line", fontname="hebo", fontsize=10)
     page.draw_rect(pymupdf.Rect(50, 200, 200, 300), color=(1, 0, 0), fill=(0, 0, 1), width=2)
     page.draw_line(pymupdf.Point(20, 320), pymupdf.Point(380, 320), color=(0, 0.5, 0), width=1.5)

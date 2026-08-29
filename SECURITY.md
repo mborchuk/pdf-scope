@@ -2,7 +2,7 @@
 
 ## Threat model in one paragraph
 
-PDF decompiler is a **local, single-user tool**. It binds to `127.0.0.1` by
+PDF Scope is a **local, single-user tool**. It binds to `127.0.0.1` by
 default, has no authentication, no accounts and no database, and it never sends
 anything anywhere. Its input — PDF files — is untrusted by nature: a PDF can
 carry JavaScript, embedded files, malformed streams and deliberately hostile
@@ -26,9 +26,15 @@ and never follows links on your behalf.
   `--host 0.0.0.0` exposes an unauthenticated file-upload and file-download
   service to your network. Do not do that on an untrusted network, and do not
   put it on the public internet without an authenticating reverse proxy.
+- **In Docker, the binding that matters is the published one.** The container
+  must listen on `0.0.0.0` for any port mapping to work, so the safety lives in
+  the `-p` flag: use `-p 127.0.0.1:8000:8000`. Plain `-p 8000:8000` publishes on
+  every host interface, which is the same exposure as `--host 0.0.0.0` on the
+  host. Note also that the container's workspace volume holds copies of every
+  PDF opened, so treat a bind mount the same way as the workspace directory.
 - **Treat the workspace as sensitive.** It holds copies of every PDF you
   opened plus everything extracted from them. Point
-  `PDF_DECOMPILER_WORKSPACE` at a location with appropriate permissions if the
+  `PDF_SCOPE_WORKSPACE` at a location with appropriate permissions if the
   default working directory is shared.
 - **Passwords for encrypted PDFs** are held in memory for the lifetime of the
   document entry so page extraction can reopen the file. They are never

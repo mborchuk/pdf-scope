@@ -1,4 +1,4 @@
-/* PDF decompiler UI.
+/* PDF Scope UI.
  *
  * Vanilla JS, no build step. The server owns all PDF logic; this file only
  * fetches JSON, draws it, and wires up view / download / copy for every
@@ -12,18 +12,32 @@
  * overlay stays aligned at any zoom.
  */
 
+/* Labels are kept short because ten toggles, each with a colour chip, share the
+   page toolbar with the pager, the zoom slider and three buttons. `title`
+   carries the full name. */
 const OVERLAY_KINDS = [
-  { key: "block", label: "Text blocks", on: true },
-  { key: "line", label: "Lines", on: false },
-  { key: "span", label: "Spans", on: false },
-  { key: "char", label: "Characters", on: false },
-  { key: "image", label: "Images", on: true },
-  { key: "table", label: "Tables", on: true },
-  { key: "drawing", label: "Drawings", on: false },
-  { key: "annotation", label: "Annotations", on: true },
-  { key: "link", label: "Links", on: true },
-  { key: "widget", label: "Form fields", on: true },
+  { key: "block", label: "Blocks", title: "Text blocks", on: true },
+  { key: "line", label: "Lines", title: "Text lines", on: false },
+  { key: "span", label: "Spans", title: "Text spans", on: false },
+  { key: "char", label: "Chars", title: "Characters", on: false },
+  { key: "image", label: "Images", title: "Image placements", on: true },
+  { key: "table", label: "Tables", title: "Detected tables", on: true },
+  { key: "drawing", label: "Drawings", title: "Vector paths", on: false },
+  { key: "annotation", label: "Annots", title: "Annotations", on: true },
+  { key: "link", label: "Links", title: "Links", on: true },
+  { key: "widget", label: "Fields", title: "Form fields", on: true },
 ];
+
+/* Short badge labels. The server's stage string ("reading document structure")
+   is too long for a 284px sidebar pill, so it becomes the element's title and
+   the badge shows the state instead. */
+const STATUS_LABELS = {
+  ready: "Ready",
+  analyzing: "Analysing",
+  pending: "Queued",
+  needs_password: "Locked",
+  error: "Error",
+};
 
 const state = {
   documents: [],
@@ -620,7 +634,9 @@ function renderDocumentList() {
       }</span></div>
         ${duplicate}${error}
         <div class="row">
-          <span class="status ${doc.status}">${escapeHtml(doc.stage || doc.status)}</span>
+          <span class="status ${doc.status}" title="${escapeHtml(doc.stage || doc.status)}">${
+            STATUS_LABELS[doc.status] || escapeHtml(doc.status)
+          }</span>
           <span class="actions">
             ${
               doc.status === "needs_password"
@@ -827,7 +843,7 @@ async function renderPagePanel(doc) {
   el("zoom-label").textContent = `${Math.round(doc.zoom * 100)}%`;
   el("overlay-toggles").innerHTML = OVERLAY_KINDS.map(
     (kind) =>
-      `<label><input type="checkbox" data-toggle="${kind.key}" ${
+      `<label title="${kind.title}"><input type="checkbox" data-toggle="${kind.key}" ${
         doc.toggles[kind.key] ? "checked" : ""
       } /> <span class="box-key ${kind.key}">${kind.label}</span></label>`
   ).join("");
@@ -1243,11 +1259,20 @@ function pageSummaryHtml(page) {
       <dt>PDF↔MuPDF matrix</dt><dd>${roundList(page.page.transformation_matrix, 3)}</dd>
       <dt>Characters</dt><dd>${text.character_count}</dd>
       <dt>Images</dt><dd>${(page.images.placements || []).length} placements</dd>
-      <dt>Drawings</dt><dd>${(page.drawings || []).length}</dd>
+      <dt>Drawings</dt><dd>${Number(
+        (page.drawings_info || {}).total ?? (page.drawings || []).length
+      ).toLocaleString()} vector paths</dd>
       <dt>Annotations</dt><dd>${(page.annotations || []).length}</dd>
       <dt>Links</dt><dd>${(page.links || []).length}</dd>
       <dt>Form fields</dt><dd>${(page.widgets || []).length}</dd>
     </dl>
+    ${
+      ((page.drawings_info || {}).total || 0) > (page.images.placements || []).length
+        ? `<p class="muted small">Most of what is drawn here is vector graphics. A picture on
+           the page is not necessarily an image: turn on the <strong>Drawings</strong> overlay
+           to see artwork built from paths.</p>`
+        : ""
+    }
     <p class="muted small">
       All coordinates are PDF points with the origin at the top-left of the page rect
       (PyMuPDF space). The PDF-space rect above uses the file's own bottom-left origin.
@@ -1563,6 +1588,33 @@ const COUNT_LABELS = {
   form_fields: "Form fields",
 };
 
+/* The six counts that lead the Overview as stat cards. The remaining
+   COUNT_LABELS keys stay in the Contents card, which also carries the
+   partial-count caveats these headline figures cannot express. */
+const STAT_CARDS = [
+  ["characters", "Characters"],
+  ["images", "Image placements"],
+  ["drawings", "Vector paths"],
+  ["tables", "Tables detected"],
+  ["annotations", "Annotations"],
+  ["form_fields", "Form fields"],
+];
+
+/* Headline counts. Rendered only once counting has produced totals; before
+   that the Contents card owns the "count this document" call to action. */
+function statGridHtml(summary) {
+  if (!summary || !summary.totals) return "";
+  const cards = STAT_CARDS.map(([key, label]) => {
+    const value = Number(summary.totals[key] || 0).toLocaleString();
+    const partial = (summary.partial_totals || []).includes(key);
+    return `<div class="stat-card">
+      <p class="stat-label">${label}${partial ? " *" : ""}</p>
+      <div class="stat-value">${value}</div>
+    </div>`;
+  }).join("");
+  return `<div class="stat-grid">${cards}</div>`;
+}
+
 function overviewHtml(doc, report, summary) {
   const info = report.metadata.info || {};
   const file = report.file;
@@ -1588,6 +1640,7 @@ function overviewHtml(doc, report, summary) {
     `<dt>${escapeHtml(label)}</dt><dd>${value === null || value === undefined || value === "" ? "—" : escapeHtml(value)}</dd>`;
 
   return `
+    ${statGridHtml(summary)}
     <div class="grid">
       <div class="card">
         <h2>File</h2>
@@ -2202,11 +2255,32 @@ function textHtml(page) {
 
 /* ------------------------------------------------------------------ images */
 
+/* Pictures on a page are not always images.
+ *
+ * Logos, road signs, diagrams and map insets are frequently vector artwork:
+ * dozens of filled paths that look exactly like a picture but have no image
+ * bytes to extract, so they never appear here. One page of the road-work
+ * handbook used in testing draws five of its six warning signs as 30 vector
+ * paths and only the sixth as a JPEG. Saying so where images are listed saves
+ * the reader from concluding that extraction lost something. */
+function vectorArtworkNote(page) {
+  const paths = (page.drawings_info || {}).total || 0;
+  if (!paths) return "";
+  return `<div class="notice">
+    This page also draws ${Number(paths).toLocaleString()} vector path${paths === 1 ? "" : "s"}.
+    Artwork that looks like a picture — a logo, a sign, a diagram — is often vector
+    graphics rather than an image: there are no image bytes to extract, so it is not
+    listed here. Turn on the <strong>Drawings</strong> overlay in the Page tab, or open the
+    <strong>Drawings</strong> tab, to see it; selecting a path shows a render of that area.
+  </div>`;
+}
+
 function imagesHtml(page) {
   const placements = page.images.placements || [];
   const objects = page.images.objects || [];
   if (!placements.length) {
     return `<p class="muted">No images are placed on page ${page.page_number + 1}.</p>
+      ${vectorArtworkNote(page)}
       ${actionBar([{ act: "download-doc-images", label: "Download all document images (zip)" }])}`;
   }
   const cards = placements
@@ -2286,6 +2360,7 @@ function imagesHtml(page) {
         }.
         ${imageModeToggleHtml({ xref: 1, bbox: [0, 0, 1, 1] })}
       </p>
+      ${vectorArtworkNote(page)}
       <p class="muted small">
         Image XObjects are stored once per xref and reused for every placement; each placement
         keeps its own bbox and matrix.
@@ -3171,6 +3246,64 @@ document.querySelector(".document-actions").addEventListener("click", (event) =>
 document.querySelector(".page-downloads").addEventListener("click", (event) => {
   const action = event.target.dataset.action;
   if (action) handleAction(action, event.target);
+});
+
+/* ------------------------------------------------------------------ theme */
+
+/* Light and dark are the same token set pointed at different values, so
+   switching is one class on <html>. The class is applied by an inline script in
+   the head to avoid a flash; this only handles changing it afterwards.
+   An explicit choice is remembered; without one, the OS decides and keeps
+   deciding. */
+const THEME_KEY = "pdf-scope-theme";
+
+function storedTheme() {
+  try {
+    return localStorage.getItem(THEME_KEY);
+  } catch (err) {
+    return null; /* private mode */
+  }
+}
+
+function applyTheme(dark) {
+  document.documentElement.classList.toggle("dark", dark);
+  const button = el("theme-toggle");
+  if (!button) return;
+  button.textContent = dark ? "☀️" : "🌙";
+  button.setAttribute("aria-label", dark ? "Switch to the light theme" : "Switch to the dark theme");
+}
+
+function setTheme(dark, { remember = true } = {}) {
+  if (remember) {
+    try {
+      localStorage.setItem(THEME_KEY, dark ? "dark" : "light");
+    } catch (err) {
+      /* private mode: the choice lasts for this page only */
+    }
+  }
+  applyTheme(dark);
+}
+
+const isDark = () => document.documentElement.classList.contains("dark");
+
+applyTheme(isDark());
+
+el("theme-toggle").addEventListener("click", () => setTheme(!isDark()));
+
+/* Follow the OS for as long as the user has not chosen for themselves. */
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (event) => {
+  if (storedTheme() === null) applyTheme(event.matches);
+});
+
+/* D toggles the theme, but never while typing or with a dialog open. */
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "d" && event.key !== "D") return;
+  if (event.metaKey || event.ctrlKey || event.altKey) return;
+  const tag = (event.target.tagName || "").toLowerCase();
+  if (tag === "input" || tag === "textarea" || tag === "select") return;
+  if (document.querySelector("dialog[open]")) return;
+  event.preventDefault();
+  setTheme(!isDark());
 });
 
 refreshDocuments();

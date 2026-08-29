@@ -22,10 +22,10 @@ the code harder to follow".
 
 ## Ground rules
 
-1. **The core stays web-free.** `pdf_decompiler/core/` must never import
+1. **The core stays web-free.** `pdf_scope/core/` must never import
    FastAPI, Starlette or anything else from the web layer. It takes a path in
    and returns JSON-serialisable data.
-2. **No PDF logic in the web layer.** `pdf_decompiler/web/app.py` calls the
+2. **No PDF logic in the web layer.** `pdf_scope/web/app.py` calls the
    core; it does not touch PyMuPDF.
 3. **Be honest about gaps.** If PyMuPDF cannot expose something, say so in the
    output (`known_limitations`, an `error` field, a UI notice) rather than
@@ -60,7 +60,7 @@ the version numbers in `README.md`, `NOTICE.md` and `docs/`.
 ```
 
 ```bash
-.venv/bin/python -m pdf_decompiler --reload
+.venv/bin/python -m pdf_scope --reload
 ```
 
 A `Makefile` wraps the same commands: `make install`, `make test`, `make lint`,
@@ -72,8 +72,8 @@ See [docs/architecture.md](docs/architecture.md) for the full picture. Short
 version:
 
 ```
-pdf_decompiler/core/   extraction: one module per concern, pure Python
-pdf_decompiler/web/    FastAPI app, document registry, process pool, static UI
+pdf_scope/core/   extraction: one module per concern, pure Python
+pdf_scope/web/    FastAPI app, document registry, process pool, static UI
 tests/                 pytest suite with generated fixture PDFs
 docs/                  documentation set
 ```
@@ -85,7 +85,7 @@ docs/                  documentation set
 | One PyMuPDF `Document` per extraction call, closed in a `finally` | PyMuPDF documents must not be shared across processes or threads |
 | All PDF work runs in the process pool | PyMuPDF states it does not support multi-threaded use, and extraction is CPU-bound |
 | Artifacts are namespaced by document id | No cross-document bleed |
-| Core raises only `PdfDecompilerError` subclasses | The web layer maps them to status codes without importing PyMuPDF |
+| Core raises only `PdfScopeError` subclasses | The web layer maps them to status codes without importing PyMuPDF |
 | Every geometry value is documented as PyMuPDF space | Numbers are meaningless without a stated origin |
 
 ## Adding an extractor
@@ -93,7 +93,7 @@ docs/                  documentation set
 Say you want to expose a new PDF feature:
 
 1. Put the extraction in the module that owns that concern under
-   `pdf_decompiler/core/` — or add a new module if it is genuinely new
+   `pdf_scope/core/` — or add a new module if it is genuinely new
    (`shadings.py`, say). Keep it a plain function taking a `pymupdf.Document`
    and/or `pymupdf.Page` and returning JSON-safe data.
 2. Wrap PyMuPDF calls that can fail in `try`/`except` and return an `error`
@@ -111,9 +111,9 @@ Say you want to expose a new PDF feature:
 
 ## Adding an endpoint
 
-1. Add a module-level function in `pdf_decompiler/web/tasks.py` taking only
+1. Add a module-level function in `pdf_scope/web/tasks.py` taking only
    picklable arguments; it opens its own document and closes it.
-2. Add the route in `pdf_decompiler/web/app.py`, `await pool.run(...)` on that
+2. Add the route in `pdf_scope/web/app.py`, `await pool.run(...)` on that
    task, and translate core errors into HTTP status codes with the existing
    helpers (`_require`, `_require_ready`, `_json`, `_text_response`).
 3. Document it in [docs/api.md](docs/api.md), including status codes and an

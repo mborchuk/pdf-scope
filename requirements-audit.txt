@@ -1,0 +1,5 @@
+# Vulnerability auditing only, kept out of the development set so that
+# installing it does not pull an HTTP stack into every contributor's
+# environment. Used by .github/workflows/audit.yml; run it locally with
+# `pip install -r requirements-audit.txt && pip-audit -r requirements.txt`.
+pip-audit==2.10.1

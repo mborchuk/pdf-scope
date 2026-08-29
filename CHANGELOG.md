@@ -83,6 +83,15 @@ from the application: see [docs/schema.md](docs/schema.md#versioning).
 - The Images tab and the page summary now say when a page draws vector paths, so a
   page whose pictures are vector artwork no longer reads as a page with missing
   images.
+- **Repository automation**: a `docker` CI job that builds the image and runs the
+  smoke test inside the container against the image's own health check; a
+  scheduled `pip-audit` workflow (`.github/workflows/audit.yml`, plus `make
+  audit`); `tests/test_packaging.py`, which fails if `requirements*.txt` and
+  `pyproject.toml` drift apart or anything is left unpinned; `CODEOWNERS`;
+  `.gitattributes`; optional pre-commit hooks (`make hooks`); the branch ruleset
+  to apply once the plan allows it (`.github/rulesets/main.json`); and
+  [docs/repository.md](docs/repository.md), which records the GitHub-side
+  configuration and the checklist for going public.
 
 ### Changed
 
@@ -101,6 +110,14 @@ from the application: see [docs/schema.md](docs/schema.md#versioning).
   aliases, because nothing has been released under the old name. Extraction
   output is unaffected: `schema_version`, `document_id`, report field names and
   per-document download prefixes are unchanged.
+
+- CI hardening: third-party actions are pinned to commit SHAs (a tag can be
+  moved, a SHA cannot) and bumped to `actions/checkout` v7.0.1 and
+  `actions/setup-python` v7.0.0, every job declares read-only permissions and a
+  timeout, checkout no longer persists credentials, and only runs on pull-request
+  branches cancel their predecessors. Dependabot now runs weekly with grouped
+  minor and patch updates per area, covers the Dockerfile base image, and leaves
+  PyMuPDF and majors as individual pull requests.
 
 ### Fixed
 

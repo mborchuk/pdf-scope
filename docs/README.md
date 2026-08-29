@@ -19,6 +19,7 @@ Everything about the project, in reading order. Start at
 | [Configuration and operations](configuration.md) | Environment variables, limits, performance, resource use, running behind a proxy |
 | [Troubleshooting](troubleshooting.md) | Symptoms, causes, fixes |
 | [Development](development.md) | Code map, tests, adding features, release process |
+| [Repository configuration](repository.md) | GitHub settings, CI and automation, plan limits, the checklist for going public |
 
 ## Repository documents
 

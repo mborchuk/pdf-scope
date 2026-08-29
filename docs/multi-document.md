@@ -35,7 +35,7 @@ and two different files called `report.pdf` never share anything.
 ## Artifact layout
 
 ```
-<workspace>/                                 ./.workspace, or PDF_DECOMPILER_WORKSPACE
+<workspace>/                                 ./.workspace, or PDF_SCOPE_WORKSPACE
 ├── 905d4d6dbfcc47c8b6495bd00da07213/        document id
 │   ├── source.pdf                           the uploaded bytes, verbatim
 │   ├── images/
@@ -80,7 +80,7 @@ flowchart TD
     W --> DONE["record.status = ready | needs_password | error"]
 ```
 
-- The pool has `PDF_DECOMPILER_WORKERS` processes, defaulting to
+- The pool has `PDF_SCOPE_WORKERS` processes, defaulting to
   `min(4, cpu_count())`.
 - `ExtractionPool.run()` waits on a semaphore of the same size, so surplus work
   queues instead of oversubscribing the machine.
@@ -157,8 +157,8 @@ during analysis.
 | Limit | Default | Change with | Behaviour at the limit |
 | --- | --- | --- | --- |
 | Open documents | 25 | `MAX_OPEN_DOCUMENTS` in `web/registry.py` | Further uploads appear in `rejected` with a clear message |
-| Upload size per file | 512 MB | `PDF_DECOMPILER_MAX_UPLOAD_MB` | That file is rejected; the others in the same request still upload |
-| Concurrent extractions | `min(4, CPU)` | `PDF_DECOMPILER_WORKERS` | Work queues on a semaphore |
+| Upload size per file | 512 MB | `PDF_SCOPE_MAX_UPLOAD_MB` | That file is rejected; the others in the same request still upload |
+| Concurrent extractions | `min(4, CPU)` | `PDF_SCOPE_WORKERS` | Work queues on a semaphore |
 | Disk | Unbounded | — | Artifacts grow with pages visited and exports built; close documents to reclaim |
 
 See [configuration.md](configuration.md) for the environment variables.

@@ -1,0 +1,39 @@
+# Keep the build context to what the image actually needs: the package, its
+# pins and the packaging metadata. Everything else only slows the build down or
+# would carry local state into the image.
+.git
+.github
+.gitignore
+.dockerignore
+Dockerfile
+
+# Local environments, caches and build output
+.venv
+venv
+.pytest_cache
+.ruff_cache
+**/__pycache__
+*.pyc
+build
+dist
+*.egg-info
+
+# Local state: uploaded PDFs and extracted artifacts
+.workspace
+
+# Not needed at runtime
+tests
+docs
+Makefile
+requirements-dev.txt
+CHANGELOG.md
+CODE_OF_CONDUCT.md
+CONTRIBUTING.md
+NOTICE.md
+SECURITY.md
+.editorconfig
+
+# Editor and OS noise
+.DS_Store
+.idea
+.vscode

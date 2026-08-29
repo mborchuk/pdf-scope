@@ -11,6 +11,35 @@ from the application: see [docs/schema.md](docs/schema.md#versioning).
 
 ### Added
 
+- **`Dockerfile`** and `.dockerignore`: a two-stage `python:3.13-slim` image
+  (~234 MB) that installs the package into a virtual environment, runs as an
+  unprivileged user, keeps its workspace on a declared volume, health-checks
+  `GET /api/status`, and takes the app's own command-line options. `make
+  docker-build` and `make docker-run` wrap the usual commands, publishing the port
+  on `127.0.0.1` only because the app has no authentication.
+- The details panel now shows an element's **text** and a **preview** for every
+  kind, not just for images: a text block's or line's text is recomposed from the
+  spans inside it, an annotation shows its `/Contents`, a field its value, a link
+  its target — and anything with a bounding box gets a render of the page clipped
+  to that box. Per-kind fields were extended (block: lines, spans, fonts, sizes;
+  line: direction and write mode; character: code point and origin; annotation:
+  author, dates, opacity, blend mode, colours; link: kind and target; field: name,
+  type, value, choices), and element labels now carry a text snippet.
+- **Overview tab**, now the first tab and where a freshly opened document lands:
+  what the file is (size, PDF version, pages, page sizes, SHA-256), who made it
+  (producer, creator, dates, title, author), what is inside it (characters, words,
+  images, vector paths, tables, annotations, links, form fields, pages without a
+  text layer), its structure and security, plus a per-page table with **Open** to
+  jump into the page view.
+- `GET /api/documents/{id}/summary?offset=&limit=&include_tables=` — per-page and
+  total content counts, cached per page and walked in ranges. Backed by
+  `pdf_scope.core.document_content_summary`.
+- **Table detection** (`core/tables.py`): every table PyMuPDF can reconstruct on a
+  page, with bounding box, row and column counts, header names, cell rectangles,
+  cell text and a Markdown rendering — always labelled as a detection, because PDF
+  has no table object. Tables are in the page report, are a new overlay kind on the
+  page view, and are counted in the Overview. Detection is skipped above 20 000
+  vector paths, where it takes tens of seconds, and says so.
 - Page view is now a continuous scroller: all pages of a document are stacked
   and scrolled like in a normal PDF viewer, with lazy rendering so only the
   pages near the viewport are fetched, extracted and overlaid.
@@ -21,7 +50,7 @@ from the application: see [docs/schema.md](docs/schema.md#versioning).
   returns to the same place.
 - `GET /api/documents/{id}/images/{xref}/preview.png?max_side=` — the pixels of
   an image XObject re-encoded as PNG, with `X-Image-Preview-Info` describing what
-  was decoded. Backed by `pdf_decompiler.core.image_preview_png`.
+  was decoded. Backed by `pdf_scope.core.image_preview_png`.
 - New core error `ImageDecodeError` for images that exist but cannot be decoded.
 - The image details panel now reports the stored format of an image.
 - `render.png?clip=x0,y0,x1,y1` renders one rectangle of a page, and
@@ -34,13 +63,59 @@ from the application: see [docs/schema.md](docs/schema.md#versioning).
   an element hidden beneath another can be selected.
 - The details panel lists every image on the page as a pickable strip when there
   is more than one.
+- `GET /api/documents/{id}/pages/{n}/drawings?offset=&limit=` and
+  `.../operators?offset=&limit=` read any window of a page's vector paths or
+  operator listing, with the real totals. Backed by
+  `pdf_scope.core.page_drawings` and `page_operators`.
+- `drawings_info` in the page report states the page's real path count and what the
+  inlined window covers; `analyze_page(drawing_limit=…)` controls that window.
+- The Drawings tab and the operator listing page through those windows, showing
+  *Showing a–b of n* with first / previous / next.
+- Image previews can be shown two ways: **Stored image** (the image's own pixels)
+  or **As on page** (that region of the page, with the text and vector graphics
+  the page draws over the image). The choice applies to the details panel, the
+  Images tab and the viewer.
 - Image viewer: clicking any thumbnail opens a scalable preview with zoom in/out,
   fit, 1:1, `Ctrl`/`Cmd` + wheel, keyboard shortcuts, download and copy. Zooming
   in fetches a larger raster instead of stretching the thumbnail, and turns off
   smoothing above 200 %.
 
+- The Images tab and the page summary now say when a page draws vector paths, so a
+  page whose pictures are vector artwork no longer reads as a page with missing
+  images.
+
+### Changed
+
+- **The project is now called PDF Scope** (was "PDF decompiler"). "Decompiling"
+  described only one of the things this tool does — listing content-stream
+  operators — and suggested a round trip back to source, which the tool does not
+  do. Every name follows: import path `pdf_scope`, console command `pdf-scope`,
+  environment variables `PDF_SCOPE_WORKSPACE`, `PDF_SCOPE_WORKERS` and
+  `PDF_SCOPE_MAX_UPLOAD_MB`, base exception `PdfScopeError`, Docker image
+  `pdf-scope`, container user `pdfscope`, browser theme key `pdf-scope-theme`,
+  export archive `pdf-scope-export.zip`, and repository
+  `github.com/mborchuk/pdf-scope`.
+
+  This is a breaking change for anyone importing the package, calling the
+  command or setting the old environment variables; there are no compatibility
+  aliases, because nothing has been released under the old name. Extraction
+  output is unaffected: `schema_version`, `document_id`, report field names and
+  per-document download prefixes are unchanged.
+
 ### Fixed
 
+- The vendored webfonts were served as `text/plain` wherever the platform has no
+  mime database — a slim container image, for instance. The server now registers
+  `font/woff2` and `font/woff` itself, so the content type is right on any
+  interpreter and any image.
+- A page report for a CAD sheet could reach **746 MB** of JSON, because every
+  vector path was inlined — 265 507 of them on one page. Such a report was served
+  to the browser and written to the page cache. Reports are now windowed: the same
+  page is 8 MB, and the paths beyond the window are reachable through the new
+  endpoint.
+- The operator listing silently stopped at 20 000 operators with no way to see
+  further, and no way to learn how many there were. On the same sheet that meant
+  20 000 of 5 071 999 operators, 0.4 % of the page.
 - Image thumbnails were blank for documents whose images are in a format
   browsers cannot display — JPEG 2000 scans in particular. Thumbnails and
   **Copy image** now use the PNG preview endpoint, **Download** still returns the
@@ -57,7 +132,7 @@ First public release. Extraction core plus web UI.
 
 ### Added
 
-**Extraction core** (`pdf_decompiler.core`, no web dependency)
+**Extraction core** (`pdf_scope.core`, no web dependency)
 
 - Document analysis: identity (name, size, SHA-256), PDF version, page/chapter
   /version counts, trailer source and `/ID`, catalog xref, page mode and
@@ -99,7 +174,7 @@ First public release. Extraction core plus web UI.
 - Explicit `known_limitations` in every document report for everything that
   exists in PDF files but is not reachable through PyMuPDF.
 
-**Web layer** (`pdf_decompiler.web`)
+**Web layer** (`pdf_scope.web`)
 
 - FastAPI application with 19 endpoints covering documents, pages, objects,
   images, attachments, text and exports.
@@ -110,7 +185,7 @@ First public release. Extraction core plus web UI.
   PyMuPDF's guidance against multi-threaded use.
 - Page reports cached to disk per document.
 
-**User interface** (`pdf_decompiler/web/static`)
+**User interface** (`pdf_scope/web/static`)
 
 - Multi-document sidebar with per-document status and progress.
 - Page view with rendered page and per-element-type bounding-box overlays,
@@ -129,5 +204,5 @@ First public release. Extraction core plus web UI.
 - Ruff lint and format configuration.
 - Documentation set under [`docs/`](docs/).
 
-[Unreleased]: https://github.com/mv-borchuk/pdf-decompiler/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/mv-borchuk/pdf-decompiler/releases/tag/v0.1.0
+[Unreleased]: https://github.com/mborchuk/pdf-scope/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/mborchuk/pdf-scope/releases/tag/v0.1.0

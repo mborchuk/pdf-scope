@@ -20,7 +20,7 @@ The virtual environment is not active or the dependencies are not installed.
 Use the interpreter inside it explicitly:
 
 ```bash
-.venv/bin/pip install -r requirements.txt && .venv/bin/python -m pdf_decompiler
+.venv/bin/pip install -r requirements.txt && .venv/bin/python -m pdf_scope
 ```
 
 **`ERROR: Could not find a version that satisfies the requirement pymupdf==1.28.2`**
@@ -34,12 +34,12 @@ Another process holds the port. Use `--port 8001`, or find the holder with
 
 **The server starts but `/` is blank or 404**
 The static files are missing from the package. Reinstall from a complete
-checkout; `pdf_decompiler/web/static/` must contain `index.html`, `app.js` and
+checkout; `pdf_scope/web/static/` must contain `index.html`, `app.js` and
 `style.css`.
 
 **Startup deleted files I had in the working directory**
 The workspace directory is emptied on every start. If you pointed
-`PDF_DECOMPILER_WORKSPACE` at a directory holding other data, that is the
+`PDF_SCOPE_WORKSPACE` at a directory holding other data, that is the
 cause. Always give it a directory of its own.
 
 ## Opening documents
@@ -71,7 +71,7 @@ fully independent.
 Close some documents. Every close deletes that document's artifacts.
 
 **Upload rejected: "file exceeds the 512 MB limit"**
-Raise `PDF_DECOMPILER_MAX_UPLOAD_MB` and restart, and raise the body-size limit
+Raise `PDF_SCOPE_MAX_UPLOAD_MB` and restart, and raise the body-size limit
 in any reverse proxy in front.
 
 **The document opened but `is_repaired` is true**
@@ -142,6 +142,58 @@ same space.
 Raster resolution is `dpi = 96 × zoom`, capped at 400. Beyond that the bitmap
 is upscaled by the browser. The cap keeps memory bounded — a 400 dpi A4 page is
 already ~3300 × 4700 pixels.
+
+**The Overview tab shows no content counts, or says the total is partial**
+Counting reads every page, so it runs in batches and pauses after about 8 seconds;
+press **Continue counting**. Documents over 400 pages are only counted on request.
+A partial `tables` total means detection was skipped on at least one page — that
+happens above 20 000 vector paths, where it would take tens of seconds; those pages
+show *skipped* in the table column.
+
+**A picture I can see on the page is not listed as an image**
+It is probably vector artwork. Logos, road signs, diagrams, arrows and map insets
+are routinely drawn as filled paths rather than placed as images, and then there
+are no image bytes to extract and nothing to list under *Images*. The *Images* tab
+says how many vector paths the page draws when this is possible; turn on the
+**Drawings** overlay, or open the *Drawings* tab, and select a path to see a render
+of that area.
+
+A page of the road-work handbook used in testing is the clearest example: of its
+six warning signs, **five are vector artwork — 30 of the page's 42 paths — and only
+the sixth is a JPEG**. The one image is the only one the *Images* overlay can box,
+which looks like five missing images until you know the file mixes both.
+
+**A table I can see is not detected, or one I cannot see is**
+PDF has no table object. Tables are reconstructed from ruling lines and text
+alignment, so a borderless table with irregular spacing can be missed, and a ruled
+form or a title block can be reported as a table — one CAD sheet in testing yielded
+a 12 × 2 "table" that is really the drawing's title block. Treat row and column
+counts as an interpretation; the *Text* tab shows what is actually on the page.
+
+**The drawings list or the operator listing stops before the end**
+Both are read in windows. A CAD sheet can hold hundreds of thousands of paths and
+millions of operators, so a page report inlines the first 5 000 of each and the tab
+shows *Showing a–b of n* with **first / previous / next**. Nothing is unreachable:
+`GET .../pages/{n}/drawings?offset=&limit=` and `.../operators?offset=&limit=` walk
+the whole page, and the page-report download contains the complete set. The
+operator total appears only after the first window is fetched, because counting
+requires lexing the whole stream.
+
+**A CAD page takes ten seconds or more to open**
+That is the extraction, not the UI. The heaviest sheet tested — 265 507 vector
+paths — needs about 11 s for its page report and about 16 s to count its 5 071 999
+operators. Both are cached afterwards (the page report on disk, the operator window
+in the tab). The page render itself is fast, so scrolling stays responsive while the
+report is still being built.
+
+**The preview does not show what I can see on the page**
+Images are only one layer. Text and vector graphics are drawn over them, so an
+image's own pixels often lack what the page shows: a map image typically has no
+place names, because the names are page text on top of it. Switch the preview to
+**As on page** to see the composited region, and back to **Stored image** for the
+bytes themselves. If the thing you are looking for appears in neither, it is not
+an image at all — turn on the *Drawings* overlay, or open the *Drawings* and
+*Text* tabs. Road signs, arrows, frames and logos are frequently vector paths.
 
 **The page clearly holds two images on top of each other, but only one can be selected**
 Clicking the page can only reach the topmost box. When boxes are stacked a
@@ -221,7 +273,7 @@ Usually thousands of vector paths, or a very large image. Try
 `include_operators=False` when using the core directly if you only need text.
 
 **Everything is slow when several documents are analysed**
-The pool is saturated. Raise `PDF_DECOMPILER_WORKERS` if you have spare cores;
+The pool is saturated. Raise `PDF_SCOPE_WORKERS` if you have spare cores;
 `pool.running` in `/api/status` shows the current load.
 
 ## Multi-document oddities
@@ -255,7 +307,7 @@ Work directly with the core when the UI is not the fastest route:
 
 ```bash
 .venv/bin/python - <<'PY'
-from pdf_decompiler.core import analyze_document, analyze_page
+from pdf_scope.core import analyze_document, analyze_page
 
 report = analyze_document("suspect.pdf")
 print("version:", report["file"]["pdf_version"])

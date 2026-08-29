@@ -18,8 +18,19 @@ SCHEMA_VERSION = "1.0"
 #: report.  Anything longer is truncated and must be downloaded in full.
 CONTENT_STREAM_INLINE_LIMIT = 200_000
 
-#: Maximum number of operators listed in the decompiled content-stream view.
+#: Largest window of operators a single request may ask for.
 CONTENT_STREAM_OPERATOR_LIMIT = 20_000
+
+#: Operators inlined in a page report. A CAD sheet can hold millions of them
+#: (5 071 999 on one sheet in testing), so the report carries the first window and
+#: the operator range accessor reaches the rest.
+PAGE_OPERATOR_LIMIT = 5_000
+
+#: Maximum number of vector paths inlined in a page report.  CAD plots routinely
+#: hold tens or hundreds of thousands of paths — 265 507 on one sheet in testing,
+#: which is 746 MB of JSON — so the report carries a window and reports the total.
+#: The rest is reachable through the drawings range accessor.
+PAGE_DRAWING_LIMIT = 5_000
 
 #: Maximum number of xref objects scanned when profiling the object model.
 XREF_SCAN_LIMIT = 200_000

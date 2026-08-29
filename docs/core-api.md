@@ -1,6 +1,6 @@
 # Core Python API
 
-`pdf_decompiler.core` is the extraction engine. It has **no web-framework
+`pdf_scope.core` is the extraction engine. It has **no web-framework
 dependency**: import it, point it at a file, get JSON-serialisable data back.
 Everything the HTTP API returns is produced by these functions.
 
@@ -26,7 +26,7 @@ Everything the HTTP API returns is produced by these functions.
 ```
 
 ```python
-from pdf_decompiler.core import analyze_document, analyze_page, dumps
+from pdf_scope.core import analyze_document, analyze_page, dumps
 ```
 
 Only `pymupdf` and the standard library are needed for the core; FastAPI and
@@ -34,7 +34,7 @@ uvicorn are for the web layer.
 
 ## Public surface
 
-Re-exported from `pdf_decompiler.core`:
+Re-exported from `pdf_scope.core`:
 
 | Name | Kind | Purpose |
 | --- | --- | --- |
@@ -44,6 +44,9 @@ Re-exported from `pdf_decompiler.core`:
 | `open_document` | function | Open and authenticate a file |
 | `describe_object` | function | Describe one indirect object |
 | `page_content_stream_bytes` | function | Whole content stream of a page |
+| `document_content_summary` | function | Per-page and total content counts |
+| `page_drawings` | function | A window of a page's vector paths, with the total |
+| `page_operators` | function | A window of the operator listing, with the exact total |
 | `render_page_png` | function | Render a page to PNG |
 | `image_preview_png` | function | Decode one image XObject and re-encode it as PNG |
 | `build_document_bundle` | function | Complete extraction as a zip |
@@ -51,7 +54,7 @@ Re-exported from `pdf_decompiler.core`:
 | `document_text` | function | Whole-document text as `.txt`/`.md` |
 | `sha256_of_file` | function | File digest |
 | `dumps` | function | JSON serialisation that understands PyMuPDF types |
-| `PdfDecompilerError` and subclasses | exceptions | See [Errors](#errors) |
+| `PdfScopeError` and subclasses | exceptions | See [Errors](#errors) |
 
 Submodules (`core.objects`, `core.text`, `core.images`, `core.drawings`,
 `core.annotations`, `core.contentstream`, `core.coordinates`, `core.page`,
@@ -156,7 +159,7 @@ The complete content stream of a page: decoded (default) or exactly as stored
 
 ## Objects and structure
 
-`pdf_decompiler.core.objects` works on an open `pymupdf.Document`.
+`pdf_scope.core.objects` works on an open `pymupdf.Document`.
 
 | Function | Returns |
 | --- | --- |
@@ -173,8 +176,8 @@ The complete content stream of a page: decoded (default) or exactly as stored
 | `parse_dict_source(source)` | `"<< /A 1 /B [2 3] >>"` → `[("A", "1"), ("B", "[2 3]")]` |
 
 ```python
-from pdf_decompiler.core import open_document, describe_object
-from pdf_decompiler.core.objects import find_references
+from pdf_scope.core import open_document, describe_object
+from pdf_scope.core.objects import find_references
 
 doc = open_document("contract.pdf")
 try:
@@ -192,7 +195,7 @@ walk stops early the result carries `truncated: true`.
 
 ## Content streams
 
-`pdf_decompiler.core.contentstream` is a self-contained PDF content-stream
+`pdf_scope.core.contentstream` is a self-contained PDF content-stream
 lexer — no PyMuPDF involved, so it works on any decoded stream bytes.
 
 ```python
@@ -205,8 +208,8 @@ Operand values follow the shapes listed in
 to plain-English descriptions.
 
 ```python
-from pdf_decompiler.core import open_document
-from pdf_decompiler.core.contentstream import parse_content_stream
+from pdf_scope.core import open_document
+from pdf_scope.core.contentstream import parse_content_stream
 
 doc = open_document("contract.pdf")
 try:
@@ -271,6 +274,69 @@ box_px = ((x0 - rect[0]) * zoom, (y0 - rect[1]) * zoom,
           (x1 - rect[0]) * zoom, (y1 - rect[1]) * zoom)
 ```
 
+## Content counts and tables
+
+```python
+document_content_summary(
+    path, *, password=None, offset=0, limit=None, include_tables=True
+) -> dict
+```
+
+Counts the content of a range of pages: characters, words, image placements,
+vector paths, detected tables, annotations, links and form fields, per page and as
+totals. Nothing is inlined — counts only. `limit=None` counts every page.
+
+```python
+summary = document_content_summary("tender.pdf")
+summary["totals"]["tables"]            # 63
+summary["pages_without_text_layer"]    # 0
+summary["pages"][0]["drawings"]        # 2
+```
+
+```python
+from pdf_scope.core.tables import extract_tables
+
+extract_tables(page, *, path_count=None, path_guard=20_000, include_text=True) -> dict
+```
+
+Detects tables on an open `pymupdf.Page`: bounding box, row and column counts,
+header names, per-cell rectangles, the cell text and a Markdown rendering. PDF has
+no table object, so this is a reconstruction from ruling lines and text alignment —
+the result carries a `note` saying exactly that.
+
+Detection walks the page's vector graphics, which costs 19 s on a sheet with
+265 507 paths, so pages above `path_guard` paths are skipped and say why. Pass
+`path_count` if the caller already counted the paths.
+
+## Windowed lists
+
+```python
+page_drawings(path, page_number, *, offset=0, limit=5000, password=None) -> dict
+page_operators(path, page_number, *, offset=0, limit=20000, password=None) -> dict
+```
+
+A page report inlines only the first `PAGE_DRAWING_LIMIT` paths and
+`PAGE_OPERATOR_LIMIT` operators — a CAD sheet can hold 265 507 paths and 5 071 999
+operators, which is hundreds of megabytes of JSON. These accessors read any window
+of either list.
+
+`page_drawings` returns `{items, total, offset, limit, truncated, page_number}`;
+`page_operators` returns the parse result plus `total`, `returned`, `offset` and
+`limit`. In both, each entry's `index` is its position on the page, and
+`operator_counts` covers the whole stream regardless of the window. Pass
+`limit=None` for everything, which is what a script wanting the full set should do.
+
+```python
+window = page_drawings("site-plan.pdf", 0, offset=0, limit=None)
+print(window["total"], "paths")
+
+ops = page_operators("site-plan.pdf", 0, limit=2000)
+print(ops["total"], "operators;", ops["operator_counts"]["l"], "line segments")
+```
+
+`analyze_page(..., drawing_limit=None)` inlines every path in the report instead of
+a window, if a caller genuinely wants one big object.
+
 ```python
 image_preview_png(
     path, xref, *, password=None, max_side=None
@@ -323,7 +389,7 @@ Whole-document text; `fmt="md"` adds a title and `## Page N` sections.
 
 ## Coordinates
 
-`pdf_decompiler.core.coordinates`:
+`pdf_scope.core.coordinates`:
 
 | Name | Purpose |
 | --- | --- |
@@ -336,7 +402,7 @@ Whole-document text; `fmt="md"` adds a title and `## Page N` sections.
 | `rect_to_pdf_space(rect, transformation_matrix)` | PyMuPDF space → PDF space |
 
 ```python
-from pdf_decompiler.core.coordinates import rect_to_pdf_space
+from pdf_scope.core.coordinates import rect_to_pdf_space
 
 page = analyze_page("a4.pdf", 0)
 matrix = page["page"]["transformation_matrix"]
@@ -346,8 +412,8 @@ print(rect_to_pdf_space([0, 0, 100, 100], matrix))   # [0.0, 742.0, 100.0, 842.0
 ## Serialisation
 
 ```python
-from pdf_decompiler.core import dumps
-from pdf_decompiler.core.schema import jsonable
+from pdf_scope.core import dumps
+from pdf_scope.core.schema import jsonable
 
 dumps(report)              # indented JSON text
 dumps(report, indent=None) # compact
@@ -360,7 +426,7 @@ convenient when you mix in raw PyMuPDF values of your own.
 ## Errors
 
 ```
-PdfDecompilerError
+PdfScopeError
 ├── DocumentOpenError      file unreadable or not a document
 ├── PasswordRequiredError  encrypted and the password did not work
 ├── PageNotFoundError      page index out of range
@@ -372,8 +438,8 @@ PyMuPDF exceptions never escape the core; failures inside a section become an
 a whole report.
 
 ```python
-from pdf_decompiler.core import analyze_document
-from pdf_decompiler.core.errors import DocumentOpenError, PasswordRequiredError
+from pdf_scope.core import analyze_document
+from pdf_scope.core.errors import DocumentOpenError, PasswordRequiredError
 
 try:
     report = analyze_document(path)
@@ -397,7 +463,7 @@ threads"* and recommends `multiprocessing`. The core is written for that model:
 
 ```python
 from concurrent.futures import ProcessPoolExecutor
-from pdf_decompiler.core import analyze_document
+from pdf_scope.core import analyze_document
 
 files = ["a.pdf", "b.pdf", "c.pdf"]
 with ProcessPoolExecutor(max_workers=4) as pool:
@@ -411,7 +477,7 @@ with ProcessPoolExecutor(max_workers=4) as pool:
 
 ```python
 from pathlib import Path
-from pdf_decompiler.core import analyze_document, analyze_page
+from pdf_scope.core import analyze_document, analyze_page
 
 out = Path("images"); out.mkdir(exist_ok=True)
 report = analyze_document("catalogue.pdf")
@@ -452,7 +518,7 @@ for op in page["content_streams"]["operators"]:
 **Full extraction bundle from a script**
 
 ```python
-from pdf_decompiler.core import build_document_bundle
+from pdf_scope.core import build_document_bundle
 
 build_document_bundle(
     "contract.pdf",

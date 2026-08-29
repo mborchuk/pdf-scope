@@ -315,7 +315,7 @@ producer used indirect objects or not.
 | `note` | string | Explains the concatenation and truncation policy |
 | `operators[]` | array | The decompiled listing, in order |
 | `operator_counts` | object | Operator → count, sorted by frequency |
-| `operators_truncated` | bool | True when the 20 000-operator limit was hit |
+| `operators_truncated` | bool | True when the page report's operator window (5 000) did not cover the stream. The exact total is not in the page report, because counting means lexing the whole stream; ask [`operators`](api.md#get-pagespage_numberoperators) for it |
 | `error` | string | Present instead of the above when the stream could not be read at all |
 
 Operator entries:
@@ -386,13 +386,47 @@ bytes could not be extracted.
 [`/images/{filename}`](api.md#get-imagesfilename). One xref is written once,
 however many placements reference it.
 
-### drawings
+### tables
 
-Array of paths, in painting order:
+Tables **detected** on the page. PDF has no table object: PyMuPDF reconstructs
+tables from ruling lines and text alignment, so this is an interpretation of the
+layout, and the report says so in `note`.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `index`, `seqno` | int | Position in the list; MuPDF's sequence number, which interleaves with text |
+| `count` | int | Tables detected |
+| `note` | string | States that this is a detection, not stored data |
+| `skipped` | bool | True when detection was not attempted |
+| `skip_reason` | string | Present with `skipped`: the page holds more vector paths than `core.tables.TABLE_DETECTION_PATH_GUARD` (20 000), where detection takes tens of seconds |
+| `error` | string | Detection was attempted and failed |
+| `items[].index` | int | Position among the detected tables |
+| `items[].bbox` | rect | Bounding box of the table |
+| `items[].row_count`, `items[].col_count` | int | Grid size as detected |
+| `items[].header` | object | `names[]` (may contain `null` for unnamed columns), `external` (header sits above the table), `bbox` |
+| `items[].cell_bboxes` | array | One rect per cell, `null` for merged or absent cells |
+| `items[].rows` | array | Cell text, row by row, up to `TABLE_ROW_LIMIT` (300) rows |
+| `items[].rows_truncated` | bool | True when the table has more rows than that |
+| `items[].markdown` | string | The table rendered as Markdown, up to 40 000 characters |
+| `items[].markdown_truncated` | bool | True when that was cut |
+
+### drawings
+
+Array of paths, in painting order — **a window, not necessarily the whole page**.
+`drawings_info` states what the window covers:
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `drawings_info.total` | int \| null | Paths on the page, whatever the window holds; `null` if MuPDF could not read them |
+| `drawings_info.offset` | int | Index of the first path in `drawings` |
+| `drawings_info.limit` | int \| null | Window size that was applied |
+| `drawings_info.truncated` | bool | True when paths after the window exist. Page through [`drawings`](api.md#get-pagespage_numberdrawings) |
+
+Each path:
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `index` | int | Position **on the page**, so it stays stable across windows |
+| `seqno` | int | MuPDF's sequence number, which interleaves with text |
 | `type` | string | `f`, `s`, `fs`, `c`, `cs`, `clip` |
 | `type_label` | string | `fill`, `stroke`, `fill and stroke`, `clip`, … |
 | `rect` | rect | Bounding box of the whole path |
@@ -526,7 +560,9 @@ The `X-Image-Preview-Info` header on
 | Nodes per structure/name-tree walk | 5 000 | `core.objects.DEFAULT_NODE_LIMIT` | `truncated: true` on that tree |
 | Tree depth | 64 | — | Node marked `truncated` |
 | Inlined decoded content stream | 200 000 chars | `core.schema.CONTENT_STREAM_INLINE_LIMIT` | `decoded_truncated: true`; download for the rest |
-| Operators listed | 20 000 | `core.schema.CONTENT_STREAM_OPERATOR_LIMIT` | `operators_truncated: true` |
+| Operators inlined in a page report | 5 000 | `core.schema.PAGE_OPERATOR_LIMIT` | `operators_truncated: true`; page through [`operators`](api.md#get-pagespage_numberoperators) |
+| Operators per window request | 20 000 | `core.schema.CONTENT_STREAM_OPERATOR_LIMIT` | `422` when a larger `limit` is asked for |
+| Vector paths inlined in a page report | 5 000 | `core.schema.PAGE_DRAWING_LIMIT` | `drawings_info.truncated: true`, with the real `total`; page through [`drawings`](api.md#get-pagespage_numberdrawings) |
 | Pages scanned for fonts | 2 000 | `core.document.FONT_SCAN_PAGE_LIMIT` | `fonts.scan_truncated: true` |
 | Inlined object stream | 200 000 chars | argument to `describe_object` | `stream_truncated: true` |
 | Render resolution | 24–400 dpi | `core.render.MAX_DPI` | Clamped silently |

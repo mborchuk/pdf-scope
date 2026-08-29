@@ -11,6 +11,7 @@ from . import annotations as annots_module
 from . import drawings as drawings_module
 from . import images as images_module
 from . import objects, text
+from . import tables as tables_module
 from .contentstream import parse_content_stream
 from .coordinates import COORDINATE_SPACE_NOTE, rect_to_list, rect_to_pdf_space
 from .document import open_document, page_transform_matrices
@@ -18,6 +19,8 @@ from .errors import PageNotFoundError
 from .schema import (
     CONTENT_STREAM_INLINE_LIMIT,
     CONTENT_STREAM_OPERATOR_LIMIT,
+    PAGE_DRAWING_LIMIT,
+    PAGE_OPERATOR_LIMIT,
     SCHEMA_VERSION,
 )
 
@@ -32,7 +35,7 @@ def content_streams(
     page: pymupdf.Page,
     *,
     inline_limit: int = CONTENT_STREAM_INLINE_LIMIT,
-    operator_limit: int | None = CONTENT_STREAM_OPERATOR_LIMIT,
+    operator_limit: int | None = PAGE_OPERATOR_LIMIT,
     include_operators: bool = True,
 ) -> dict[str, Any]:
     """Return the page content stream(s): raw sizes, decoded text and operators."""
@@ -98,6 +101,8 @@ def analyze_page(
     document_id: str | None = None,
     image_dir: str | Path | None = None,
     include_operators: bool = True,
+    drawing_limit: int | None = PAGE_DRAWING_LIMIT,
+    include_tables: bool = True,
 ) -> dict[str, Any]:
     """Produce the full report for a single page.
 
@@ -125,6 +130,8 @@ def analyze_page(
 
         image_output = Path(image_dir) if image_dir is not None else None
         image_data = images_module.extract_page_images(doc, page, image_output)
+        # Vector paths are windowed: see PAGE_DRAWING_LIMIT for why.
+        drawing_window = drawings_module.extract_drawings_range(page, limit=drawing_limit)
 
         report: dict[str, Any] = {
             "schema_version": SCHEMA_VERSION,
@@ -146,7 +153,15 @@ def analyze_page(
             "content_streams": content_streams(doc, page, include_operators=include_operators),
             "text": text.extract_text(page),
             "images": image_data,
-            "drawings": drawings_module.extract_drawings(page),
+            "drawings": drawing_window["items"],
+            "drawings_info": {
+                key: drawing_window[key] for key in ("total", "offset", "limit", "truncated")
+            },
+            "tables": tables_module.extract_tables(
+                page,
+                path_count=drawing_window.get("total"),
+                include_text=include_tables,
+            ),
             "annotations": annots_module.extract_annotations(page),
             "links": annots_module.extract_links(page),
             "widgets": annots_module.extract_widgets(page),
@@ -189,6 +204,61 @@ def _safe_fonts(page: pymupdf.Page) -> list[Any]:
         return list(page.get_fonts(full=True))
     except Exception:
         return []
+
+
+def page_drawings(
+    path: str | Path,
+    page_number: int,
+    *,
+    offset: int = 0,
+    limit: int | None = PAGE_DRAWING_LIMIT,
+    password: str | None = None,
+) -> dict[str, Any]:
+    """A window of a page's vector paths, with the page's real total.
+
+    The page report only inlines the first ``PAGE_DRAWING_LIMIT`` paths, because a
+    CAD sheet can carry hundreds of thousands. This is how the rest is reached.
+    """
+    doc = open_document(path, password)
+    try:
+        if page_number < 0 or page_number >= doc.page_count:
+            raise PageNotFoundError(f"page {page_number} does not exist")
+        window = drawings_module.extract_drawings_range(
+            doc.load_page(page_number), offset=offset, limit=limit
+        )
+        window["page_number"] = page_number
+        return window
+    finally:
+        doc.close()
+
+
+def page_operators(
+    path: str | Path,
+    page_number: int,
+    *,
+    offset: int = 0,
+    limit: int | None = CONTENT_STREAM_OPERATOR_LIMIT,
+    password: str | None = None,
+) -> dict[str, Any]:
+    """A window of a page's content-stream operators, with the exact total.
+
+    The whole stream is lexed so the total is exact, but only the requested window
+    is materialised, which keeps memory flat on the very long streams that CAD
+    plotters produce.
+    """
+    doc = open_document(path, password)
+    try:
+        if page_number < 0 or page_number >= doc.page_count:
+            raise PageNotFoundError(f"page {page_number} does not exist")
+        data = doc.load_page(page_number).read_contents()
+    finally:
+        doc.close()
+
+    parsed = parse_content_stream(
+        data, operator_limit=limit, operator_offset=offset, count_all=True
+    )
+    parsed["page_number"] = page_number
+    return parsed
 
 
 def page_content_stream_bytes(

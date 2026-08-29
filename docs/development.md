@@ -33,8 +33,8 @@ selection) lives in `pyproject.toml`.
 
 | Task | Command | `make` |
 | --- | --- | --- |
-| Run the server | `.venv/bin/python -m pdf_decompiler` | `make run` |
-| Run with reload | `.venv/bin/python -m pdf_decompiler --reload` | `make dev` |
+| Run the server | `.venv/bin/python -m pdf_scope` | `make run` |
+| Run with reload | `.venv/bin/python -m pdf_scope --reload` | `make dev` |
 | Tests | `.venv/bin/python -m pytest` | `make test` |
 | One test | `.venv/bin/python -m pytest tests/test_page.py::test_images_placements_and_files -q` | — |
 | Lint | `.venv/bin/ruff check .` | `make lint` |
@@ -70,7 +70,7 @@ selection) lives in `pyproject.toml`.
 
 Break any of these and the project stops being what it claims to be:
 
-1. `pdf_decompiler.core` imports nothing from `pdf_decompiler.web` and nothing
+1. `pdf_scope.core` imports nothing from `pdf_scope.web` and nothing
    web-related at all.
 2. `web/app.py` never imports `pymupdf`.
 3. Every core entry point opens its own `Document` and closes it in `finally`.
@@ -86,8 +86,8 @@ Break any of these and the project stops being what it claims to be:
 A quick check for the first two:
 
 ```bash
-grep -rn "fastapi\|starlette\|uvicorn" pdf_decompiler/core/ ; echo "expect no matches"
-grep -n "pymupdf" pdf_decompiler/web/app.py ; echo "expect no matches"
+grep -rn "fastapi\|starlette\|uvicorn" pdf_scope/core/ ; echo "expect no matches"
+grep -n "pymupdf" pdf_scope/web/app.py ; echo "expect no matches"
 ```
 
 ## Tests
@@ -195,7 +195,7 @@ easier to call the core function directly in a script.
 **Extraction**: reproduce without the server.
 
 ```python
-from pdf_decompiler.core import analyze_page, dumps
+from pdf_scope.core import analyze_page, dumps
 print(dumps(analyze_page("suspect.pdf", 0))[:4000])
 ```
 
@@ -203,7 +203,7 @@ print(dumps(analyze_page("suspect.pdf", 0))[:4000])
 worry about. `state` is module-scoped, so add a temporary
 `window.state = state` while debugging.
 
-**Process pool**: set `PDF_DECOMPILER_WORKERS=1` to serialise work and make
+**Process pool**: set `PDF_SCOPE_WORKERS=1` to serialise work and make
 tracebacks easier to read.
 
 ## Continuous integration
@@ -224,7 +224,7 @@ tracebacks easier to read.
    server.
 2. Update `CHANGELOG.md`: move `Unreleased` items under a new version heading
    with the date.
-3. Bump the version in `pyproject.toml` and `pdf_decompiler/__init__.py`.
+3. Bump the version in `pyproject.toml` and `pdf_scope/__init__.py`.
 4. If the report shape changed incompatibly, bump `SCHEMA_VERSION` in
    `core/schema.py` and say so in the changelog.
 5. Refresh version strings in `README.md`, `NOTICE.md` and `docs/README.md`.

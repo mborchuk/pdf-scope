@@ -34,7 +34,7 @@ def rich_pdf(tmp_path_factory: pytest.TempPathFactory) -> Path:
     doc = pymupdf.open()
 
     page = doc.new_page(width=400, height=500)
-    page.insert_text((72, 100), "Hello decompiler", fontname="helv", fontsize=14)
+    page.insert_text((72, 100), "Hello pdf scope", fontname="helv", fontsize=14)
     page.insert_text((72, 140), "second line", fontname="hebo", fontsize=10)
     page.draw_rect(pymupdf.Rect(50, 200, 200, 300), color=(1, 0, 0), fill=(0, 0, 1), width=2)
     page.draw_line(pymupdf.Point(20, 320), pymupdf.Point(380, 320), color=(0, 0.5, 0), width=1.5)
@@ -116,6 +116,50 @@ def corrupt_pdf(tmp_path_factory: pytest.TempPathFactory) -> Path:
     """Bytes that only look like a PDF."""
     path = tmp_path_factory.mktemp("fixtures") / "corrupt.pdf"
     path.write_bytes(b"%PDF-1.7\nthis is not a pdf body at all\n%%EOF\n")
+    return path
+
+
+@pytest.fixture(scope="session")
+def table_pdf(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """A ruled grid with text in every cell, so table detection has real input."""
+    path = tmp_path_factory.mktemp("fixtures") / "table.pdf"
+    doc = pymupdf.open()
+    page = doc.new_page(width=400, height=300)
+
+    left, top, cell_width, cell_height = 40.0, 40.0, 100.0, 30.0
+    columns, rows = 3, 4
+    for row in range(rows + 1):
+        y = top + row * cell_height
+        page.draw_line(
+            pymupdf.Point(left, y),
+            pymupdf.Point(left + columns * cell_width, y),
+            width=0.8,
+        )
+    for column in range(columns + 1):
+        x = left + column * cell_width
+        page.draw_line(
+            pymupdf.Point(x, top),
+            pymupdf.Point(x, top + rows * cell_height),
+            width=0.8,
+        )
+
+    headers = ("Item", "Quantity", "Unit")
+    body = (("Gravel", "120", "m3"), ("Topsoil", "45", "m3"), ("Kerb", "310", "m"))
+    for column, label in enumerate(headers):
+        page.insert_text(
+            (left + column * cell_width + 6, top + 20), label, fontname="hebo", fontsize=10
+        )
+    for row, cells in enumerate(body, start=1):
+        for column, value in enumerate(cells):
+            page.insert_text(
+                (left + column * cell_width + 6, top + row * cell_height + 20),
+                value,
+                fontname="helv",
+                fontsize=10,
+            )
+
+    doc.save(path)
+    doc.close()
     return path
 
 

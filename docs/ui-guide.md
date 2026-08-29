@@ -2,12 +2,13 @@
 
 The UI is a single page served at `/`. No build step, no external assets: one
 HTML file, one CSS file, one JavaScript file, all in
-`pdf_decompiler/web/static/`.
+`pdf_scope/web/static/`.
 
 - [Layout](#layout)
 - [Top bar](#top-bar)
 - [Document sidebar](#document-sidebar)
 - [Document header](#document-header)
+- [Overview tab](#overview-tab)
 - [Page tab](#page-tab)
 - [Structure tab](#structure-tab)
 - [Objects tab](#objects-tab)
@@ -30,12 +31,12 @@ HTML file, one CSS file, one JavaScript file, all in
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│ PDF decompiler        [Open PDFs] [Download everything] pool status   │
+│ PDF Scope        [Open PDFs] [Download everything] pool status   │
 ├───────────────┬──────────────────────────────────────────────────────┤
 │ Documents     │ file.pdf · PDF 1.7 · 4 pages · 11 KB · sha256 … · id  │
 │ ┌───────────┐ │            [Document JSON] [.txt] [.md] [Images] […]  │
 │ │ a.pdf     │ ├──────────────────────────────────────────────────────┤
-│ │ ready   4 │ │ Page │ Structure │ Objects │ Metadata │ Fonts │ …     │
+│ │ ready   4 │ │ Overview │ Page │ Structure │ Objects │ Metadata │ …  │
 │ ├───────────┤ ├──────────────────────────────────────────────────────┤
 │ │ b.pdf     │ │  « ‹ 2 / 4 › »  [2] zoom ▓▓▓ ☑blocks ☐lines ☑images  │
 │ │ analyzing │ │ ┌───────────────────────────┐ ┌────────────────────┐ │
@@ -94,6 +95,32 @@ of the document id — enough to tell two similar files apart at a glance.
 | **Images (zip)** | Every image of every page, extracting pages first if needed |
 | **Download everything** | The complete bundle for this document |
 
+## Overview tab
+
+The first tab, and the one a freshly opened document lands on: what this file is,
+before looking at any page.
+
+| Card | Contents |
+| --- | --- |
+| **File** | Name, size, PDF version, page count, the page sizes in use with how many pages have each, how many pages are rotated, SHA-256, document id |
+| **Who made it** | Producer, creator, creation and modification dates, title, author, subject, keywords, language — with a reminder that these are the file's own claims, and the raw Info dictionary and XMP are in the Metadata tab |
+| **Contents** | Characters, words, image placements, vector paths, tables detected, annotations, links, form fields, and how many pages have no text layer |
+| **Structure and security** | Tagged or not, outline entries, fonts (and how many are embedded), attachments, form fields, optional-content groups, document JavaScript, encryption, repaired-on-open, fast web view, xref slots, object streams |
+| **Warnings** | Anything the extractor wants to say about this specific file |
+| **Pages** | One row per page: label, size, rotation, and once counted the characters, images, paths, tables and annotations on it, with **Open** to jump straight into the page view |
+
+**How counting works.** Everything except the *Contents* card and the count columns
+is already in the document report, so it appears instantly. Counting content means
+touching every page: cheap on text pages, seconds on a CAD sheet. So counting
+starts on its own in batches of 25 pages, stops after about 8 seconds, and offers
+**Continue counting**; documents over 400 pages are only counted on request. The
+counts fill in progressively, and the server keeps them for as long as the document
+is open, so revisiting the tab is instant.
+
+Table counts can be incomplete by design: on pages with more than 20 000 vector
+paths detection is skipped, that page's cell reads *skipped*, and the card says the
+total is partial.
+
 ## Page tab
 
 Every page of the document is stacked in one continuous scroller, so a document
@@ -147,6 +174,7 @@ Keys are ignored while a text field has focus, and while a tab other than
 | Spans | amber | off | `lines[].spans[]` |
 | Characters | purple | off | `spans[].chars[]` — dense on text-heavy pages |
 | Images | orange | on | `images.placements[]` |
+| Tables | green, dashed | on | `tables.items[]` — detected, not stored in the file. Selecting one shows its grid size, header cells and the table as Markdown, with **Copy table as Markdown** |
 | Drawings | teal | off | `drawings[]` |
 | Annotations | red | on | `annotations[]` |
 | Links | violet | on | `links[]` |
@@ -169,24 +197,66 @@ character count, and counts of images, drawings, annotations, links and form
 fields. A page with no text layer says so here. Scrolling to another page
 replaces the summary with that page's, which also clears the selection.
 
-With an element selected it shows what is relevant to that kind:
+With an element selected the panel always shows three things where they exist —
+**a preview**, **its text**, and **its own fields** — followed by the raw JSON.
+
+**Preview.** Images show their own pixels. Every other kind shows the rendered
+page clipped to the element's box, with a little padding so a thin line or a
+single character is recognisable in context; that render is the only picture of a
+path, an annotation or a form field that exists. Clicking any preview opens the
+scalable viewer.
+
+**Text.** Only spans carry text in the extraction. A block's or a line's text is
+therefore recomposed from the spans inside it — spans as written, one line per
+line — and the panel says so, so nobody mistakes it for a stored string. Other
+kinds borrow what reads as their text: an annotation's `/Contents`, a form field's
+value, a link's URI. **Copy text** is offered whenever there is text.
+
+**Fields per kind:**
 
 | Kind | Extra fields |
 | --- | --- |
+| Text block | lines, spans, the fonts and sizes used inside it |
+| Line | spans, fonts, writing direction, write mode (horizontal or vertical) |
 | Span | font, size, colour, active font flags |
-| Image | xref, stored pixel size, DPI, colourspace, bits per component, transparency mask, placement matrix, stored format, plus a thumbnail |
-| Drawing | type, stroke and fill colours, width, dashes, number of path items |
-| Annotation / widget | xref |
+| Character | the character, its Unicode code point, its origin, whether the glyph is synthetic |
+| Image | xref, stored pixel size, DPI, colourspace, bits per component, transparency mask, placement matrix, stored format |
+| Table | rows × columns, where the header is, header cell text, cell count, and the table as Markdown |
+| Drawing | type, stroke and fill colours, line width, dashes, fill rule, optional-content layer, number of path items |
+| Annotation | xref, type and type number, author, modification date, subject, opacity, blend mode, colours, whether it has a popup |
+| Link | link kind, target URI or target page, xref |
+| Form field | xref, field name, field type, current value, choices, font, whether it is signed |
 
-Buttons on the panel: **Copy element JSON**, **Copy text** (text elements),
-**Download image** and **Copy image** (images), **Open xref N** (jumps to the
-object browser). A collapsible **Raw JSON** section holds the element exactly
-as the API returned it.
+Buttons: **Copy element JSON**, **Copy text**, **Copy table as Markdown**
+(tables), **Download image** and **Copy image** (images), **Open xref N** (jumps
+to the object browser). A collapsible **Raw JSON** section holds the element
+exactly as the API returned it.
+
+Element labels carry a snippet of their text — *Text block 14 — FÖRKLARINGAR
+Ytskikt G = Golv…* — which is what makes overlay tooltips and the stacked-element
+chooser readable.
 
 When the selected element is an image and the page holds more than one, the
 panel also shows **Images on this page**: a strip of small previews, current one
 highlighted. Clicking one selects that image, which is the reliable way to reach
 an image hidden underneath another.
+
+### Stored image vs as on page
+
+A page is a composition. Text and vector graphics are drawn *over* images, so an
+image's own pixels are often not what you see on the page — a map image can carry
+no place names at all, because the names are page text painted on top of it.
+
+Image previews therefore have two views, switched with the buttons above the
+preview and repeated in the viewer's toolbar:
+
+| View | Shows | Download gives |
+| --- | --- | --- |
+| **Stored image** (default) | Only the image's own pixels, as a PNG re-encode — exactly the content of the stored bytes | The original bytes, in the PDF's own format |
+| **As on page** | That rectangle of the page, composited: the image plus every text and vector element drawn over it | That render, as PNG |
+
+The choice applies to the details panel, the *Images* tab and the viewer, and it
+stays until changed. Images with no bytes of their own only have the second view.
 
 ### Image viewer
 
@@ -198,6 +268,7 @@ that scales the image freely.
 | `−` / `+`, or `Ctrl`/`Cmd` + wheel | Zoom out / in in 25 % steps |
 | **Fit**, or `0` | Whole image in the window, never enlarged past 100 % |
 | **1:1**, or `1` | One image pixel per screen pixel |
+| **Stored image** / **As on page** | Switch between the image's own pixels and the composited page region (shown only when both are possible) |
 | **Download** | Original bytes for a stored image; the region PNG for a rendered one |
 | **Copy** | The image on the clipboard as PNG |
 | **Close**, or `Esc` | Back to the page |
@@ -286,6 +357,13 @@ component, format, filters, SMask, stored size.
 Every placement on the page gets its own card, including several placements of
 the same xref and images that overlap each other, so nothing is hidden.
 
+**When the page draws vector paths, the tab says so.** A picture is not
+necessarily an image: logos, signs and diagrams are often filled paths, which have
+no image bytes and therefore no card here. The notice names the path count and
+points at the *Drawings* overlay, so a page that looks like it has six pictures but
+lists one image explains itself. The page summary in the details panel makes the
+same point when a page draws more paths than it places images.
+
 **Thumbnails are PNG re-encodes, downloads are not.** Images are stored in the
 format the PDF used, and scanned files often use JPEG 2000, JBIG2 or CCITT,
 which browsers cannot draw. Thumbnails therefore come from
@@ -314,6 +392,14 @@ Card header actions cover the whole document: **Download all document images
 One row per vector path: index, type (fill / stroke / fill and stroke / clip),
 bounding rect, stroke and fill colours, line width, dash pattern and the number
 of path items, with **Copy** for the full path JSON including every coordinate.
+
+**Long pages are read in windows.** CAD sheets routinely hold tens of thousands of
+paths — 265 507 on one sheet in testing — so the heading states the real total and
+a bar above the table shows which window is on screen
+(*Showing 5 001–7 000 of 265 507*) with **first**, **previous** and **next**. The
+index column is the path's position on the page, so it does not shift between
+windows. Windows are 5 000 paths from the page report and 2 000 per fetch after
+that; the whole set is in the page-report download.
 
 ## Annotations tab
 
@@ -346,6 +432,14 @@ The decompiled view of the current page:
 Buttons: **Copy decoded stream**, **Download decoded**, **Download raw**,
 **Copy operators JSON**. When the inline copy is truncated the UI says so and
 points at the download.
+
+**Operator count and windows.** The page report carries the first 5 000 operators
+and does not count the rest, because counting means lexing the whole stream. Until
+a window is fetched the tab says *"5 000 shown — this stream holds more; page a
+window to count them all"*; pressing **next** fetches a window and then the exact
+total is known and displayed (*5 071 999 in total* on the heaviest sheet tested).
+Counting a stream that long takes some seconds, so the fetch shows a toast while it
+runs. The index column is the operator's position in the stream.
 
 ## Not extractable tab
 
@@ -395,7 +489,7 @@ characters of the document id, so several open documents never collide:
 | Image | `invoice_2024--905d4d6d--image-xref11.png` |
 | Attachment | `invoice_2024--905d4d6d--data.csv` |
 | Bundle | `invoice_2024--905d4d6d--extraction.zip` |
-| All documents | `pdf-decompiler-export.zip` |
+| All documents | `pdf-scope-export.zip` |
 
 The prefix is sanitised: only letters, digits, dot, underscore and hyphen
 survive, truncated to 60 characters.

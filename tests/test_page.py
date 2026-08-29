@@ -7,9 +7,15 @@ from pathlib import Path
 
 import pytest
 
-from pdf_decompiler.core import analyze_page, image_preview_png, render_page_png
-from pdf_decompiler.core.coordinates import rect_to_pdf_space
-from pdf_decompiler.core.errors import ObjectNotFoundError
+from pdf_scope.core import (
+    analyze_page,
+    image_preview_png,
+    page_drawings,
+    page_operators,
+    render_page_png,
+)
+from pdf_scope.core.coordinates import rect_to_pdf_space
+from pdf_scope.core.errors import ObjectNotFoundError
 
 
 def test_text_granularities_and_font_details(rich_pdf: Path) -> None:
@@ -18,9 +24,9 @@ def test_text_granularities_and_font_details(rich_pdf: Path) -> None:
 
     text = page["text"]
     assert text["has_text_layer"] is True
-    assert "Hello decompiler" in text["plain"]
+    assert "Hello pdf scope" in text["plain"]
     assert any("Hello" in block["text"] for block in text["blocks"])
-    assert any(word["text"] == "decompiler" for word in text["words"])
+    assert any(word["text"] == "scope" for word in text["words"])
 
     spans = [
         span
@@ -82,6 +88,61 @@ def test_image_preview_downscales_to_max_side(scanned_pdf: Path) -> None:
     assert max(full["source_pixels"]) > 4
     assert max(small["preview_pixels"]) == 4
     assert small["source_pixels"] == full["source_pixels"]
+
+
+def test_page_report_windows_the_drawings(rich_pdf: Path) -> None:
+    """CAD sheets carry hundreds of thousands of paths, so the report inlines a
+    window and states the real total instead of growing without bound."""
+    page = analyze_page(rich_pdf, 0, drawing_limit=1)
+    assert len(page["drawings"]) == 1
+    info = page["drawings_info"]
+    assert info["total"] >= 2, "the fixture draws a rectangle and a line"
+    assert info["offset"] == 0
+    assert info["limit"] == 1
+    assert info["truncated"] is True
+
+    whole = analyze_page(rich_pdf, 0, drawing_limit=None)
+    assert len(whole["drawings"]) == info["total"]
+    assert whole["drawings_info"]["truncated"] is False
+
+
+def test_drawing_windows_are_reachable_and_keep_their_real_index(rich_pdf: Path) -> None:
+    total = page_drawings(rich_pdf, 0, limit=None)["total"]
+    assert total >= 2
+
+    second = page_drawings(rich_pdf, 0, offset=1, limit=1)
+    assert second["total"] == total
+    assert second["offset"] == 1
+    assert len(second["items"]) == 1
+    assert second["items"][0]["index"] == 1, "index is the position on the page"
+    assert second["items"][0] == page_drawings(rich_pdf, 0, limit=None)["items"][1]
+
+    past_end = page_drawings(rich_pdf, 0, offset=10_000, limit=10)
+    assert past_end["items"] == []
+    assert past_end["total"] == total
+    assert past_end["truncated"] is False
+
+
+def test_operator_windows_report_the_exact_total(rich_pdf: Path) -> None:
+    """The page report cannot count a long stream without lexing all of it, so the
+    exact total comes from the operator range accessor."""
+    first = page_operators(rich_pdf, 0, limit=3)
+    assert first["returned"] == 3
+    assert first["offset"] == 0
+    assert first["total"] >= 3
+    assert first["truncated"] is True
+    assert [op["index"] for op in first["operators"]] == [0, 1, 2]
+
+    everything = page_operators(rich_pdf, 0, limit=None)
+    assert everything["total"] == first["total"]
+    assert everything["truncated"] is False
+    assert everything["operators"][1] == first["operators"][1]
+
+    middle = page_operators(rich_pdf, 0, offset=2, limit=2)
+    assert [op["index"] for op in middle["operators"]] == [2, 3]
+    assert middle["operators"] == everything["operators"][2:4]
+    # Counts always cover the whole stream, not just the window.
+    assert middle["operator_counts"] == everything["operator_counts"]
 
 
 def test_region_render_covers_only_the_requested_rectangle(rich_pdf: Path) -> None:

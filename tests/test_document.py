@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from pdf_decompiler.core import analyze_document, render_page_png
-from pdf_decompiler.core.errors import DocumentOpenError, PasswordRequiredError
+from pdf_scope.core import analyze_document, render_page_png
+from pdf_scope.core.errors import DocumentOpenError, PasswordRequiredError
 
 
 def test_document_report_is_json_serialisable(rich_pdf: Path) -> None:

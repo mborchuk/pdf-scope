@@ -1,0 +1,1095 @@
+/* PDF Scope UI — the ContaAutónomo design system.
+ *
+ * Clean utilitarian fintech: an indigo-on-slate palette, borders over shadow,
+ * small radii, and the OS system font. Deliberately undramatic — the data is
+ * the design.
+ *
+ * Structure mirrors the design system's own file split, kept in one file
+ * because this UI ships with no build step:
+ *
+ *   1. colour tokens      (light :root, then html.dark re-points the same names)
+ *   2. typography tokens  (system stack, 12→30px scale, body 15px)
+ *   3. spacing tokens     (8-pt grid, radii 4/6/8/12/999)
+ *   4. elevation tokens   (soft slate-tinted 3-step ramp)
+ *   5. component layer
+ *
+ * Every component reads a token. Never hardcode a hex below the token block —
+ * that is what makes dark mode free.
+ *
+ * Two notes where this UI needs more than the system defines:
+ *
+ * - Overlay kinds. The ten element kinds get their own --box-* tokens, taken
+ *   from the design. They are the one place a raw hue is meaningful, because
+ *   they label geometry drawn over a white page render rather than chrome.
+ * - Page canvas. The rendered PDF page must read as a white object, so the
+ *   scroller sits on --color-surface-3 while the page itself stays #fff. That
+ *   #fff is paper, not a surface token, so it does not invert in dark mode.
+ */
+
+/* ======================================================================== *
+   1. Colour tokens
+   Palette evolved from the original brand (indigo #667eea, orange #ff6b35)
+   but shifted to WCAG 2.1 AA-compliant shades; ratios noted inline.
+ * ======================================================================== */
+
+:root {
+  color-scheme: light;
+
+  /* ---- Brand scales ---- */
+  --indigo-50: #eef2ff;
+  --indigo-100: #e0e7ff;
+  --indigo-500: #6366f1;
+  --indigo-600: #4f46e5; /* button bg, white text = 5.9:1 AA */
+  --indigo-700: #4338ca; /* hover / links on white = 7.7:1 */
+  --orange-500: #ff6b35; /* original brand accent (decorative) */
+  --orange-600: #ea580c; /* interactive accent, white text = 4.5:1 AA */
+  --orange-700: #c2410c; /* hover */
+
+  /* ---- Status scales ---- */
+  --blue-600: #1d4ed8;
+  --green-700: #15803d;
+  --green-100: #dcfce7;
+  --green-800: #166534;
+  --red-600: #dc2626;
+  --red-100: #fee2e2;
+  --red-800: #991b1b;
+  --amber-100: #fef3c7;
+  --amber-400: #fbbf24;
+  --amber-800: #92400e;
+
+  /* ---- Neutral (slate) ---- */
+  --slate-900: #0f172a;
+  --slate-800: #1e293b;
+  --slate-700: #334155;
+  --slate-600: #475569;
+  --slate-500: #64748b;
+  --slate-400: #94a3b8;
+  --slate-300: #cbd5e1;
+  --slate-200: #e2e8f0;
+  --slate-100: #f1f5f9;
+  --slate-50: #f8fafc;
+  --white: #ffffff;
+
+  /* ---- Semantic: surfaces & text ---- */
+  --color-bg: var(--slate-100);
+  --color-surface: var(--white);
+  --color-surface-2: var(--slate-50);
+  --color-surface-3: var(--slate-100);
+  --color-border: var(--slate-200);
+  --color-border-strong: var(--slate-300);
+
+  --color-text: #1f2937; /* 13.6:1 on surface */
+  --color-text-muted: var(--slate-600); /* 7.4:1 AA */
+  --color-text-faint: var(--slate-500); /* 4.7:1 AA */
+
+  /* ---- Semantic: interactive ---- */
+  --color-primary: var(--indigo-600);
+  --color-primary-hover: var(--indigo-700);
+  --color-primary-tint: var(--indigo-50);
+  --color-on-primary: var(--white);
+
+  --color-accent: var(--orange-600);
+  --color-accent-hover: var(--orange-700);
+  --color-on-accent: var(--white);
+
+  --color-link: var(--indigo-700);
+
+  /* ---- Semantic: feedback ---- */
+  --color-success: var(--green-700);
+  --color-success-bg: var(--green-100);
+  --color-success-fg: var(--green-800);
+  --color-danger: var(--red-600);
+  --color-danger-bg: var(--red-100);
+  --color-danger-fg: var(--red-800);
+  --color-warning-bg: var(--amber-100);
+  --color-warning-fg: var(--amber-800);
+  --color-info: var(--blue-600);
+
+  /* ---- Focus ring (visible, 3:1 against bg) ---- */
+  --focus-ring: 0 0 0 3px var(--indigo-100), 0 0 0 5px var(--indigo-600);
+
+  /* ---- Overlay element kinds ---- */
+  --box-block: #4f46e5;
+  --box-line: #15803d;
+  --box-span: #fbbf24;
+  --box-char: #6366f1;
+  --box-image: #ea580c;
+  --box-table: #15803d;
+  --box-drawing: #1d4ed8;
+  --box-annotation: #dc2626;
+  --box-link: #4338ca;
+  --box-widget: #92400e;
+  /* Wash shown on hover / selection, per kind. */
+  --box-wash: 14%;
+
+  /* ---- This UI's own aliases ---- */
+  --mono: var(--font-mono);
+  /* Paper. Deliberately not a surface token: a rendered PDF page is white in
+     both themes, because that is what the file actually is. */
+  --paper: #ffffff;
+}
+
+/* Dark theme — re-point the SAME semantic tokens. Components need no changes. */
+html.dark {
+  color-scheme: dark;
+  --color-bg: var(--slate-900);
+  --color-surface: var(--slate-800);
+  --color-surface-2: #243044;
+  --color-surface-3: var(--slate-700);
+  --color-border: var(--slate-700);
+  --color-border-strong: var(--slate-600);
+
+  --color-text: var(--slate-200);
+  --color-text-muted: var(--slate-300);
+  --color-text-faint: var(--slate-400);
+
+  --color-primary: #818cf8;
+  --color-primary-hover: #a5b4fc;
+  --color-primary-tint: #312e81;
+  --color-on-primary: var(--slate-900);
+
+  --color-accent: #fb923c;
+  --color-accent-hover: #fdba74;
+  --color-on-accent: var(--slate-900);
+
+  --color-link: #93c5fd;
+
+  --color-success-bg: #064e3b;
+  --color-success-fg: #6ee7b7;
+  --color-danger-bg: #7f1d1d;
+  --color-danger-fg: #fca5a5;
+  --color-warning-bg: #78350f;
+  --color-warning-fg: #fcd34d;
+
+  --focus-ring: 0 0 0 3px rgba(129, 140, 248, 0.35), 0 0 0 5px #818cf8;
+
+  /* Overlay hues are drawn on white paper in both themes, so they keep their
+     light-theme values. Only the labels around them re-theme. */
+}
+
+/* ======================================================================== *
+   2. Typography tokens — system stack, no webfonts, zero-latency rendering
+ * ======================================================================== */
+
+:root {
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --fs-xs: 0.75rem; /* 12 */
+  --fs-sm: 0.8125rem; /* 13 */
+  --fs-base: 0.9375rem; /* 15 */
+  --fs-md: 1.0625rem; /* 17 */
+  --fs-lg: 1.25rem; /* 20 */
+  --fs-xl: 1.5rem; /* 24 */
+  --fs-2xl: 1.875rem; /* 30 */
+
+  --lh-tight: 1.25;
+  --lh-base: 1.55;
+
+  --fw-normal: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+}
+
+/* ======================================================================== *
+   3. Spacing, radius & layout tokens — strict 8-pt grid
+ * ======================================================================== */
+
+:root {
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 2.5rem;
+  --space-8: 3rem;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-full: 999px;
+
+  --nav-height: 64px;
+  --sidebar-width: 284px;
+  --details-width: 352px;
+
+  --z-nav: 100;
+  --z-dropdown: 200;
+  --z-overlay: 1000;
+  --z-toast: 2000;
+}
+
+/* ======================================================================== *
+   4. Elevation tokens — subtle; cards lean on borders, not drop shadow
+ * ======================================================================== */
+
+:root {
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.1);
+  --shadow-md: 0 2px 6px rgba(15, 23, 42, 0.08), 0 4px 12px rgba(15, 23, 42, 0.1);
+  --shadow-lg: 0 10px 30px rgba(15, 23, 42, 0.18);
+}
+html.dark {
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.55);
+}
+
+/* ======================================================================== *
+   5. Component layer
+ * ======================================================================== */
+
+/* ---- Reset & base ---- */
+
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+/* Flex column so the topbar's height is never a magic number the layout has
+   to subtract. Everything below scrolls inside its own pane. */
+body {
+  margin: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: var(--font-sans);
+  font-size: var(--fs-base);
+  line-height: var(--lh-base);
+  color: var(--color-text);
+  background: var(--color-bg);
+}
+
+h1,
+h2,
+h3,
+h4 {
+  color: var(--color-text);
+  line-height: var(--lh-tight);
+  font-weight: var(--fw-semibold);
+}
+h1 { font-size: var(--fs-lg); margin: 0; }
+h2 { font-size: var(--fs-md); margin: 0 0 var(--space-2); }
+/* Minor section label: small, uppercase, tracked, faint. */
+h3 {
+  font-size: var(--fs-xs);
+  margin: var(--space-5) 0 var(--space-2);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-faint);
+  font-weight: var(--fw-semibold);
+}
+
+a { color: var(--color-link); text-decoration: none; }
+a:hover { color: var(--color-primary); text-decoration: underline; }
+img, svg, video, canvas { max-width: 100%; }
+
+/* Visible keyboard focus everywhere; mouse clicks stay clean. */
+:focus { outline: none; }
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+.hidden { display: none !important; }
+.muted { color: var(--color-text-muted); }
+.small { font-size: var(--fs-sm); }
+.placeholder { padding: var(--space-8); text-align: center; color: var(--color-text-faint); }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skip-link {
+  position: absolute;
+  left: var(--space-3);
+  top: -3rem;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  z-index: var(--z-toast);
+  transition: top 0.15s ease;
+}
+.skip-link:focus { top: var(--space-3); }
+
+/* ---- Top bar ---- */
+
+.topbar {
+  flex: 0 0 auto;
+  min-height: var(--nav-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: 0 var(--space-5);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
+  z-index: var(--z-nav);
+}
+.topbar-actions { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+
+/* Brand: a typographic monogram tile plus the wordmark, whose second half
+   carries the orange accent. The gradient tile is one of only two gradients
+   the system allows. */
+.brand { display: flex; align-items: center; gap: var(--space-3); }
+.brand-mark {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, var(--indigo-500), var(--indigo-700));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: var(--fs-base);
+  font-weight: var(--fw-bold);
+}
+.brand-text {
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-bold);
+  color: var(--color-text);
+  white-space: nowrap;
+}
+.brand-text span { color: var(--color-accent); }
+
+/* ---- Buttons ---- */
+
+.button {
+  display: inline-block;
+  padding: var(--space-2) var(--space-4);
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  line-height: 1.4;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, color 0.15s;
+}
+.button:hover { background: var(--color-surface-3); color: var(--color-text); }
+.button.primary {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-on-primary);
+}
+.button.primary:hover { background: var(--color-primary-hover); border-color: var(--color-primary-hover); }
+.button.small { padding: var(--space-1) var(--space-3); font-size: var(--fs-xs); }
+.button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* ---- Layout ---- */
+
+.layout { display: flex; align-items: stretch; flex: 1; min-height: 0; }
+
+.sidebar {
+  width: var(--sidebar-width);
+  flex: 0 0 var(--sidebar-width);
+  border-right: 1px solid var(--color-border);
+  padding: var(--space-4);
+  background: var(--color-surface-2);
+  overflow-y: auto;
+}
+.sidebar h2 {
+  font-size: var(--fs-xs);
+  margin: 0 0 var(--space-3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-faint);
+  font-weight: var(--fw-semibold);
+}
+
+.document-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.document-item {
+  position: relative;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-3);
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.document-item:hover { border-color: var(--color-border-strong); }
+.document-item.selected { border-color: var(--color-primary); }
+/* The selected document is marked with a primary dot rather than a fill, so
+   the card keeps its neutral surface and the status badge stays readable. */
+.document-item.selected::after {
+  content: "";
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
+}
+.document-item .name {
+  font-weight: var(--fw-semibold);
+  font-size: var(--fs-sm);
+  word-break: break-all;
+  padding-right: var(--space-4);
+}
+.document-item .meta {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+  font-size: var(--fs-xs);
+  color: var(--color-text-faint);
+}
+.document-item .row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+/* Status: colour plus a dot plus text, so meaning never rests on colour
+   alone. Label is short and uppercase; the server's full stage string is the
+   element's title. */
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  line-height: 1.4;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  background: var(--color-surface-3);
+  color: var(--color-text-muted);
+}
+.status::before {
+  content: "";
+  width: 0.5em;
+  height: 0.5em;
+  border-radius: 50%;
+  background: currentColor;
+  flex: 0 0 auto;
+}
+.status.ready { background: var(--color-success-bg); color: var(--color-success-fg); }
+.status.error { background: var(--color-danger-bg); color: var(--color-danger-fg); }
+.status.needs_password { background: var(--color-warning-bg); color: var(--color-warning-fg); }
+.status.analyzing,
+.status.pending { background: var(--color-primary-tint); color: var(--color-primary-hover); }
+
+.content { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+.document-header {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+  align-items: flex-start;
+  flex-wrap: wrap;
+  padding: var(--space-4) var(--space-5);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+.document-header h2 { margin: 0 0 var(--space-1); }
+.document-header p { margin: 0; font-size: var(--fs-sm); color: var(--color-text-muted); }
+.document-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; justify-content: flex-end; }
+
+/* ---- Tabs ---- */
+
+.tabs {
+  flex: 0 0 auto;
+  display: flex;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-5) 0;
+  background: var(--color-surface);
+  border-bottom: 2px solid var(--color-border);
+  overflow-x: auto;
+}
+.tab {
+  padding: var(--space-2) var(--space-4);
+  margin-bottom: -2px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.2s, background 0.15s;
+}
+.tab:hover { background: var(--color-surface-2); color: var(--color-text); }
+.tab.active {
+  color: var(--color-primary);
+  background: var(--color-primary-tint);
+  border-bottom-color: var(--color-primary);
+}
+
+.panels { flex: 1; min-height: 0; }
+.panel { display: none; height: 100%; overflow: auto; padding: var(--space-5); }
+.panel.active { display: block; }
+.panel[data-panel="page"].active { display: flex; flex-direction: column; padding: 0; }
+
+/* ---- Page panel ---- */
+
+.page-toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  padding: var(--space-3) var(--space-5);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+.page-toolbar input[type="number"] {
+  width: 64px;
+  padding: var(--space-1) var(--space-2);
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.page-toolbar input[type="number"]:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-tint);
+}
+#page-indicator {
+  font-size: var(--fs-sm);
+  color: var(--color-text-muted);
+  min-width: 52px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.zoom { display: flex; align-items: center; gap: var(--space-2); font-size: var(--fs-sm); color: var(--color-text-muted); }
+#zoom-label { font-variant-numeric: tabular-nums; min-width: 40px; }
+input[type="checkbox"] { width: auto; accent-color: var(--color-primary); }
+input[type="range"] { width: 110px; accent-color: var(--color-primary); }
+
+.overlay-toggles { display: flex; gap: var(--space-3); flex-wrap: wrap; font-size: var(--fs-xs); }
+.overlay-toggles label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+/* Each toggle carries a small colour chip matching its overlay hue. The chip
+   holds the colour and the label keeps full contrast, so a pale hue like Spans
+   never becomes unreadable text. */
+.box-key { display: inline-flex; align-items: center; gap: var(--space-1); color: inherit; }
+.box-key::before {
+  content: "";
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  flex: 0 0 auto;
+  background: var(--color-border-strong);
+}
+.box-key.block::before { background: var(--box-block); }
+.box-key.line::before { background: var(--box-line); }
+.box-key.span::before { background: var(--box-span); }
+.box-key.char::before { background: var(--box-char); }
+.box-key.image::before { background: var(--box-image); }
+.box-key.table::before { background: var(--box-table); }
+.box-key.drawing::before { background: var(--box-drawing); }
+.box-key.annotation::before { background: var(--box-annotation); }
+.box-key.link::before { background: var(--box-link); }
+.box-key.widget::before { background: var(--box-widget); }
+
+.page-downloads { display: flex; gap: var(--space-2); margin-left: auto; }
+
+.page-body { display: flex; flex: 1; min-height: 0; }
+.page-canvas {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  padding: var(--space-5);
+  background: var(--color-surface-3);
+  scroll-behavior: smooth;
+}
+.page-canvas:focus-visible { box-shadow: none; outline: 2px solid var(--color-primary); outline-offset: -2px; }
+
+/* Continuous page scroller: one .page-slot per page of the document. */
+.page-scroll { display: flex; flex-direction: column; align-items: center; gap: var(--space-6); }
+.page-slot { display: flex; flex-direction: column; align-items: center; gap: var(--space-2); }
+.page-slot-label { font-size: var(--fs-xs); color: var(--color-text-faint); }
+.page-slot.current .page-slot-label { color: var(--color-primary); font-weight: var(--fw-semibold); }
+
+.page-stage {
+  position: relative;
+  margin: 0 auto;
+  background: var(--paper);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+}
+/* The page in view is ringed in primary rather than merely bordered. */
+.page-slot.current .page-stage {
+  border-color: transparent;
+  box-shadow: var(--shadow-md), 0 0 0 2px var(--color-primary);
+}
+.page-stage img { display: block; width: 100%; height: 100%; }
+.overlay { position: absolute; inset: 0; }
+
+/* Shown until a slot's render arrives, and again after a slot is unloaded. */
+.page-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-faint);
+  font-size: var(--fs-sm);
+  background: var(--color-surface-2);
+  animation: placeholder-pulse 1.6s ease-in-out infinite;
+}
+.page-placeholder.error {
+  background: var(--color-danger-bg);
+  color: var(--color-danger-fg);
+  animation: none;
+  padding: var(--space-2);
+  text-align: center;
+}
+@keyframes placeholder-pulse {
+  0%,
+  100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .page-canvas { scroll-behavior: auto; }
+  .page-placeholder { animation: none; }
+}
+
+/* Overlay boxes. Each kind sets `color`; the border and the hover wash both
+   derive from it, so a kind is defined in exactly one place. */
+.box {
+  position: absolute;
+  border: 1px solid currentColor;
+  pointer-events: auto;
+  cursor: pointer;
+}
+.box:hover,
+.box.selected { background: color-mix(in srgb, currentColor var(--box-wash), transparent); }
+.box.block { color: var(--box-block); }
+.box.line { color: var(--box-line); }
+.box.span { color: var(--box-span); }
+.box.char { color: var(--box-char); }
+.box.image { color: var(--box-image); }
+/* Tables share the Lines hue in the design, so the dash is what tells them
+   apart. Keep it. */
+.box.table { color: var(--box-table); border-style: dashed; }
+.box.drawing { color: var(--box-drawing); }
+.box.annotation { color: var(--box-annotation); }
+.box.link { color: var(--box-link); }
+.box.widget { color: var(--box-widget); }
+
+.details {
+  width: var(--details-width);
+  flex: 0 0 var(--details-width);
+  border-left: 1px solid var(--color-border);
+  padding: var(--space-5);
+  overflow: auto;
+  background: var(--color-surface);
+}
+/* Element text: readable, but never so tall that it pushes the facts off screen. */
+.details .element-text { max-height: 240px; font-size: var(--fs-sm); }
+.details .thumb { height: auto; max-height: 220px; }
+.details h3:first-child { margin-top: 0; }
+
+/* ---- Tables: the hero component ---- */
+
+table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+th,
+td {
+  padding: var(--space-2);
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--color-border);
+}
+th {
+  background: var(--color-surface-2);
+  color: var(--color-text-muted);
+  font-weight: var(--fw-semibold);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+tbody tr:hover { background: var(--color-surface-2); }
+td.mono,
+.mono { font-family: var(--font-mono); font-size: var(--fs-xs); word-break: break-all; }
+
+/* Grouping / total rows. */
+.row-group { background: var(--color-surface-3); font-weight: var(--fw-semibold); }
+.row-subtotal { background: var(--color-warning-bg); color: var(--color-warning-fg); font-weight: var(--fw-semibold); }
+.row-total { background: var(--color-primary-tint); font-weight: var(--fw-bold); border-top: 2px solid var(--color-primary); }
+.clickable-row { cursor: pointer; }
+.clickable-row:hover { background: var(--color-primary-tint); }
+
+pre {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  overflow: auto;
+  max-height: 320px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-width: 100%;
+}
+
+/* ---- Cards ---- */
+
+/* The system's card is a white surface with a tinted header bar and a padded
+   body. This UI's markup is `.card > .card-head` followed by bare body
+   content, so rather than wrap 33 call sites the header bleeds out to the
+   card edges with a negative margin. Same pixels, no markup churn. */
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-5);
+  margin-bottom: var(--space-5);
+  overflow: hidden;
+}
+/* The header bar comes in two shapes in this codebase: an explicit .card-head
+   carrying a title plus action buttons, or a bare leading heading. Both bleed
+   out to the card edges so either way the result is the tinted bar the system
+   specifies. */
+.card > .card-head:first-child,
+.card > h2:first-child {
+  margin: calc(-1 * var(--space-5)) calc(-1 * var(--space-5)) var(--space-5);
+  padding: var(--space-4) var(--space-5);
+  background: var(--color-surface-2);
+  border-bottom: 1px solid var(--color-border);
+}
+.card > .card-head:first-child {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  align-items: center;
+}
+.card > h2:first-child { font-size: var(--fs-md); }
+/* A .card-head lower down the card is a plain section row, not a second bar. */
+.card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  align-items: center;
+  margin-bottom: var(--space-3);
+}
+.card-head h2,
+.card-head h3 { margin: 0; font-size: var(--fs-md); font-weight: var(--fw-semibold); }
+/* A card head holding only a section label keeps that label's own scale. */
+.card-head h3 {
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-faint);
+}
+.card > :last-child { margin-bottom: 0; }
+.actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+
+/* Stat cards: the Overview's headline counts. */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+.stat-card {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+}
+.stat-card .stat-label {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+}
+.stat-card .stat-value {
+  margin-top: var(--space-2);
+  font-size: var(--fs-2xl);
+  font-weight: var(--fw-bold);
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--lh-tight);
+}
+
+.tree {
+  list-style: none;
+  margin: 0;
+  padding-left: var(--space-4);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+}
+.tree li { margin: 1px 0; }
+.tree .node { cursor: pointer; padding: 1px var(--space-1); border-radius: var(--radius-sm); }
+.tree .node:hover { background: var(--color-surface-3); }
+.tree .node.selected { background: var(--color-primary-tint); }
+.tree .tag { color: var(--color-primary); }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: var(--space-5); }
+.grid .kv { grid-template-columns: 112px 1fr; }
+.grid .card { margin-bottom: 0; }
+
+.thumb {
+  width: 100%;
+  height: 130px;
+  object-fit: contain;
+  background: var(--paper);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: zoom-in;
+}
+
+/* ---- Alerts / notices ---- */
+
+.notice {
+  padding: var(--space-3) var(--space-4);
+  margin: var(--space-3) 0;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--amber-400);
+  background: var(--color-warning-bg);
+  color: var(--color-warning-fg);
+  font-size: var(--fs-sm);
+}
+.error-text { color: var(--color-danger); }
+
+.kv { display: grid; grid-template-columns: 130px 1fr; gap: var(--space-2) var(--space-4); font-size: var(--fs-sm); }
+.kv dt { color: var(--color-text-muted); }
+.kv dd { margin: 0; font-family: var(--font-mono); word-break: break-all; }
+
+/* ---- Transient surfaces ---- */
+
+.toast {
+  position: fixed;
+  bottom: var(--space-5);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  padding: var(--space-3) var(--space-4);
+  z-index: var(--z-toast);
+  font-size: var(--fs-sm);
+  box-shadow: var(--shadow-md);
+}
+
+/* Floating theme toggle. */
+.theme-toggle {
+  position: fixed;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  z-index: var(--z-toast);
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--fs-lg);
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.theme-toggle:hover { background: var(--color-surface-3); }
+
+dialog {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  max-width: 640px;
+  width: 90vw;
+  padding: var(--space-5);
+}
+dialog::backdrop { background: rgba(15, 23, 42, 0.5); }
+dialog h3 { margin-top: 0; }
+dialog textarea,
+dialog input {
+  width: 100%;
+  padding: var(--space-3);
+  font-family: inherit;
+  font-size: var(--fs-base);
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+dialog textarea { font-family: var(--font-mono); font-size: var(--fs-xs); resize: vertical; }
+dialog input { margin: var(--space-2) 0; }
+dialog textarea:focus,
+dialog input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-tint);
+}
+dialog menu { display: flex; gap: var(--space-2); justify-content: flex-end; padding: 0; margin: var(--space-3) 0 0; }
+::placeholder { color: var(--color-text-faint); opacity: 1; }
+
+/* Image preview viewer: scalable, scrollable, keyboard driven. */
+/* Only style the open state as a flex column: a base `display: flex` would beat
+   the browser's `dialog:not([open]) { display: none }` and leave the closed
+   dialog on top of the page, swallowing every click. */
+dialog.viewer { width: 92vw; max-width: 1600px; height: 88vh; padding: 0; }
+dialog.viewer[open] { display: flex; flex-direction: column; }
+.viewer-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface-2);
+  border-bottom: 1px solid var(--color-border);
+}
+.viewer-controls { display: flex; align-items: center; gap: var(--space-2); margin-left: auto; }
+/* Stored pixels vs the composited page region. */
+.mode-toggle { display: inline-flex; gap: var(--space-1); }
+#viewer-zoom { min-width: 46px; text-align: center; font-variant-numeric: tabular-nums; }
+.viewer-body { flex: 1; min-height: 0; overflow: auto; background: var(--color-surface-3); padding: var(--space-4); }
+.viewer-body img {
+  display: block;
+  margin: 0 auto;
+  background: var(--paper);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  image-rendering: auto;
+}
+.viewer-note { margin: 0; padding: var(--space-3) var(--space-4); border-top: 1px solid var(--color-border); }
+
+/* Strip of every image on the page, so overlapping images stay reachable. */
+.image-choices { display: flex; gap: var(--space-2); flex-wrap: wrap; margin: var(--space-2) 0 var(--space-4); }
+.image-choice {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 2px;
+  background: var(--color-surface);
+  cursor: pointer;
+  width: 62px;
+}
+.image-choice:hover { border-color: var(--color-border-strong); }
+.image-choice.current { border-color: var(--color-primary); background: var(--color-primary-tint); }
+.image-choice img {
+  width: 100%;
+  height: 42px;
+  object-fit: contain;
+  background: var(--paper);
+  border-radius: var(--radius-sm);
+  display: block;
+}
+.image-choice .label {
+  font-size: 9px;
+  color: var(--color-text-faint);
+  text-align: center;
+  display: block;
+  margin-top: 2px;
+  word-break: break-all;
+}
+
+/* Chooser shown when several overlay boxes sit under the same click. */
+.box-picker {
+  position: fixed;
+  z-index: var(--z-overlay);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-1) 0;
+  max-height: 320px;
+  overflow: auto;
+  min-width: 200px;
+  box-shadow: var(--shadow-md);
+}
+.box-picker .head {
+  font-size: var(--fs-xs);
+  color: var(--color-text-faint);
+  padding: var(--space-1) var(--space-4) var(--space-2);
+}
+.box-picker button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  padding: var(--space-2) var(--space-4);
+  cursor: pointer;
+}
+.box-picker button:hover { background: var(--color-surface-3); }
+.box-picker .kind {
+  color: var(--color-text-faint);
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Paging controls for lists too long to inline (vector paths, operators). */
+.window-bar { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+
+/* ---- Responsive ---- */
+
+@media (max-width: 1024px) {
+  .topbar { padding: 0 var(--space-4); }
+  .sidebar { width: 240px; flex-basis: 240px; }
+  .details { width: 300px; flex-basis: 300px; }
+}
+@media (max-width: 768px) {
+  .panel { padding: var(--space-4); }
+  .document-header,
+  .page-toolbar { padding: var(--space-3) var(--space-4); }
+  .tabs { padding: var(--space-2) var(--space-4) 0; }
+}

@@ -3,25 +3,45 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>PDF decompiler</title>
+    <title>PDF Scope</title>
     <link rel="stylesheet" href="/static/style.css" />
+    <!-- Theme is applied before first paint so a dark-mode user never sees a
+         white flash. Follows the OS unless the user has chosen explicitly. -->
+    <script>
+      (function () {
+        try {
+          var saved = localStorage.getItem("pdf-scope-theme");
+          var dark =
+            saved === "dark" ||
+            (saved === null && window.matchMedia("(prefers-color-scheme: dark)").matches);
+          if (dark) document.documentElement.classList.add("dark");
+        } catch (err) {
+          /* private mode: fall back to the light theme */
+        }
+      })();
+    </script>
   </head>
   <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+
     <header class="topbar">
-      <h1>PDF decompiler</h1>
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">PS</span>
+        <h1 class="brand-text">PDF <span>Scope</span></h1>
+      </div>
       <div class="topbar-actions">
+        <span id="pool-status" class="muted small"></span>
+        <button id="download-all" class="button" title="Complete extraction of every open document">
+          Download Everything
+        </button>
         <label class="button primary">
           Open PDFs
           <input id="file-input" type="file" accept="application/pdf,.pdf" multiple hidden />
         </label>
-        <button id="download-all" class="button" title="Complete extraction of every open document">
-          Download everything (all documents)
-        </button>
-        <span id="pool-status" class="muted"></span>
       </div>
     </header>
 
-    <main class="layout">
+    <main class="layout" id="main">
       <aside class="sidebar">
         <h2>Documents</h2>
         <ul id="document-list" class="document-list"></ul>
@@ -42,13 +62,14 @@
             <button class="button" data-action="download-doc-md">Text (.md)</button>
             <button class="button" data-action="download-doc-images">Images (zip)</button>
             <button class="button primary" data-action="download-doc-bundle">
-              Download everything
+              Download Everything
             </button>
           </div>
         </div>
 
         <nav id="tabs" class="tabs hidden">
-          <button class="tab active" data-tab="page">Page</button>
+          <button class="tab active" data-tab="overview">Overview</button>
+          <button class="tab" data-tab="page">Page</button>
           <button class="tab" data-tab="structure">Structure</button>
           <button class="tab" data-tab="objects">Objects</button>
           <button class="tab" data-tab="metadata">Metadata</button>
@@ -59,13 +80,16 @@
           <button class="tab" data-tab="annotations">Annotations</button>
           <button class="tab" data-tab="forms">Forms</button>
           <button class="tab" data-tab="attachments">Attachments</button>
-          <button class="tab" data-tab="stream">Content stream</button>
-          <button class="tab" data-tab="limits">Not extractable</button>
+          <button class="tab" data-tab="stream">Content Stream</button>
+          <button class="tab" data-tab="limits">Not Extractable</button>
         </nav>
 
         <div id="panels" class="panels">
+          <!-- Overview: what this file is, and how much of what is inside it -->
+          <div class="panel active" data-panel="overview"></div>
+
           <!-- Page panel: rendered page + overlays + element details -->
-          <div class="panel active" data-panel="page">
+          <div class="panel" data-panel="page">
             <div class="page-toolbar">
               <button class="button" data-action="page-first" title="First page (Home)">
                 &laquo;
@@ -95,8 +119,8 @@
               <span class="overlay-toggles" id="overlay-toggles"></span>
               <span class="page-downloads">
                 <button class="button small" data-action="download-page-json">Page JSON</button>
-                <button class="button small" data-action="download-page-text">Page text</button>
-                <button class="button small" data-action="copy-page-text">Copy page text</button>
+                <button class="button small" data-action="download-page-text">Page Text</button>
+                <button class="button small" data-action="copy-page-text">Copy Page Text</button>
               </span>
             </div>
             <div class="page-body">
@@ -133,6 +157,14 @@
 
     <div id="toast" class="toast hidden"></div>
 
+    <button
+      id="theme-toggle"
+      class="theme-toggle"
+      type="button"
+      title="Switch between light and dark (D)"
+      aria-live="polite"
+    ></button>
+
     <dialog id="copy-fallback">
       <p>Clipboard access was blocked by the browser. Select the text below and copy it.</p>
       <textarea id="copy-fallback-text" rows="12"></textarea>
@@ -144,6 +176,22 @@
       <div class="viewer-bar">
         <strong id="viewer-title"></strong>
         <span id="viewer-meta" class="muted small"></span>
+        <span id="viewer-modes" class="mode-toggle hidden">
+          <button
+            class="button small"
+            data-viewer-mode="stored"
+            title="The image's own pixels — what a download contains"
+          >
+            Stored image
+          </button>
+          <button
+            class="button small"
+            data-viewer-mode="page"
+            title="This region of the page, with text and graphics drawn over the image"
+          >
+            As on page
+          </button>
+        </span>
         <span class="viewer-controls">
           <button class="button small" data-viewer="out" title="Zoom out (−)">&minus;</button>
           <span id="viewer-zoom" class="muted small"></span>

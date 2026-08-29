@@ -10,6 +10,7 @@ generated from the code is served at `/docs`, the OpenAPI schema at
   - [POST /api/documents](#post-apidocuments)
   - [GET /api/documents](#get-apidocuments)
   - [GET /api/documents/{document_id}](#get-apidocumentsdocument_id)
+  - [GET /api/documents/{document_id}/summary](#get-apidocumentsdocument_idsummary)
   - [POST /api/documents/{document_id}/unlock](#post-apidocumentsdocument_idunlock)
   - [DELETE /api/documents/{document_id}](#delete-apidocumentsdocument_id)
   - [GET /api/documents/{document_id}/report.json](#get-apidocumentsdocument_idreportjson)
@@ -17,6 +18,8 @@ generated from the code is served at `/docs`, the OpenAPI schema at
   - [GET /api/documents/{document_id}/pages/{page_number}](#get-apidocumentsdocument_idpagespage_number)
   - [GET .../pages/{page_number}/report.json](#get-pagespage_numberreportjson)
   - [GET .../pages/{page_number}/render.png](#get-pagespage_numberrenderpng)
+  - [GET .../pages/{page_number}/drawings](#get-pagespage_numberdrawings)
+  - [GET .../pages/{page_number}/operators](#get-pagespage_numberoperators)
   - [GET .../pages/{page_number}/text](#get-pagespage_numbertext)
   - [GET .../pages/{page_number}/content-stream](#get-pagespage_numbercontent-stream)
 - [Objects](#objects)
@@ -113,7 +116,7 @@ curl -s -X POST http://127.0.0.1:8000/api/documents \
 ```
 
 `rejected` lists files that were not accepted at all, each with a reason:
-oversized (see `PDF_DECOMPILER_MAX_UPLOAD_MB`) or the open-document limit
+oversized (see `PDF_SCOPE_MAX_UPLOAD_MB`) or the open-document limit
 reached. A file that uploads fine but fails to parse is **not** rejected here —
 it is created and later marked `status: "error"`.
 
@@ -166,6 +169,46 @@ curl -s http://127.0.0.1:8000/api/documents/905d4d6dbfcc47c8b6495bd00da07213
 
 `report` is `null` until the status is `ready`. Its full shape is documented in
 [schema.md](schema.md#document-report).
+
+### GET /api/documents/{document_id}/summary
+
+How much of what is in the document: characters, words, image placements, vector
+paths, detected tables, annotations, links and form fields, per page and in total.
+
+The document report is cheap because it never touches page content. These counts
+do touch every page, and a CAD sheet takes seconds on its own, so a request counts
+one range of pages. Results are cached per page for the document's lifetime, and
+`totals` and `pages` always cover **everything counted so far** — walk ranges until
+`pages_counted` reaches `page_count`.
+
+| Query | Type | Default | Range |
+| --- | --- | --- | --- |
+| `offset` | int | `0` | ≥ 0 |
+| `limit` | int | `25` | 1–200 pages per request |
+| `include_tables` | bool | `true` | `false` skips table detection, which is the slowest part |
+
+```bash
+curl -s "http://127.0.0.1:8000/api/documents/905d…/summary?offset=0&limit=25"
+```
+
+```json
+{
+  "page_count": 64, "offset": 0, "limit": 25, "pages_counted": 25,
+  "complete": false, "pages_without_text_layer": 0,
+  "totals": {"characters": 19819, "words": 2189, "images": 25, "drawings": 889,
+             "tables": 24, "annotations": 0, "links": 0, "form_fields": 0},
+  "partial_totals": [],
+  "table_detection_path_guard": 20000,
+  "pages": [{"page_number": 0, "characters": 251, "words": 30, "images": 1,
+             "drawings": 2, "tables": 0, "annotations": 0, "links": 0,
+             "form_fields": 0, "has_text_layer": true}]
+}
+```
+
+`partial_totals` names the fields whose totals are incomplete because some page
+could not supply them — in practice `tables`, on pages above
+`table_detection_path_guard` vector paths, where detection is skipped and the
+page's `tables` is `null` with `tables_skipped: true`.
 
 ### POST /api/documents/{document_id}/unlock
 
@@ -271,6 +314,49 @@ curl -s -o detail.png \
 
 With `clip`, `X-Render-Info` additionally carries `clip` (the rectangle actually
 used) and `page_point_size`.
+
+### GET .../pages/{page_number}/drawings
+
+A window of the page's vector paths, with the page's real total. The page report
+inlines only the first 5 000 paths, because CAD sheets carry far more — 265 507 on
+one sheet in testing, which is 746 MB of JSON if inlined.
+
+| Query | Type | Default | Range |
+| --- | --- | --- | --- |
+| `offset` | int | `0` | ≥ 0. Beyond the last path returns an empty `items` |
+| `limit` | int | `5000` | 1–5000 |
+
+```json
+{"items": [{"index": 264000, "type": "s", "rect": [...], "items": [...]}],
+ "total": 265507, "offset": 264000, "limit": 50, "truncated": true,
+ "page_number": 0}
+```
+
+`index` is the path's position on the page, not in the window, so it stays stable
+however the page is walked. Same field shapes as
+[`drawings`](schema.md#drawings) in the page report.
+
+### GET .../pages/{page_number}/operators
+
+A window of the decompiled operator listing, with the **exact** total. The whole
+stream is lexed to count operators — one sheet in testing held 5 071 999 — but only
+the window is materialised, so memory stays flat. Expect seconds, not
+milliseconds, on such a page.
+
+| Query | Type | Default | Range |
+| --- | --- | --- | --- |
+| `offset` | int | `0` | ≥ 0 |
+| `limit` | int | `2000` | 1–20000 |
+
+```json
+{"operators": [{"index": 5000000, "op": "l", "offset": 53526090, "operands": [...]}],
+ "operator_counts": {"l": 2987200, "m": 364361, "q": 358078},
+ "total": 5071999, "offset": 5000000, "limit": 20, "returned": 20,
+ "truncated": true, "bytes_parsed": 61093208, "bytes_total": 61093208,
+ "page_number": 0}
+```
+
+`operator_counts` always covers the whole stream, not just the window.
 
 ### GET .../pages/{page_number}/text
 
@@ -451,7 +537,7 @@ of aborting the archive.
   "schema_version": "1.0",
   "documents_open": 3,
   "max_documents": 25,
-  "workspace": "/home/you/pdf-decompiler/.workspace",
+  "workspace": "/home/you/pdf-scope/.workspace",
   "pool": { "workers": 4, "running": 0, "started": true }
 }
 ```

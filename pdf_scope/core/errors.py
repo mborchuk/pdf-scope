@@ -8,25 +8,25 @@ PyMuPDF itself.
 from __future__ import annotations
 
 
-class PdfDecompilerError(Exception):
+class PdfScopeError(Exception):
     """Base class for all core errors."""
 
 
-class DocumentOpenError(PdfDecompilerError):
+class DocumentOpenError(PdfScopeError):
     """The file could not be opened or is not a usable document."""
 
 
-class PasswordRequiredError(PdfDecompilerError):
+class PasswordRequiredError(PdfScopeError):
     """The document is encrypted and the supplied password did not work."""
 
 
-class PageNotFoundError(PdfDecompilerError):
+class PageNotFoundError(PdfScopeError):
     """The requested page index does not exist."""
 
 
-class ObjectNotFoundError(PdfDecompilerError):
+class ObjectNotFoundError(PdfScopeError):
     """The requested xref number does not exist in the document."""
 
 
-class ImageDecodeError(PdfDecompilerError):
+class ImageDecodeError(PdfScopeError):
     """An image exists but its pixels could not be decoded or re-encoded."""

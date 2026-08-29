@@ -75,19 +75,40 @@ def _color(value: Any) -> dict[str, Any] | None:
     return {"components": components, "hex": f"#{red:02x}{green:02x}{blue:02x}"}
 
 
-def extract_drawings(page: pymupdf.Page) -> list[dict[str, Any]]:
-    """Return every vector path on the page with coordinates and paint state."""
+def extract_drawings_range(
+    page: pymupdf.Page,
+    *,
+    offset: int = 0,
+    limit: int | None = None,
+) -> dict[str, Any]:
+    """Return a window of the page's vector paths, plus the total count.
+
+    A single CAD sheet can hold hundreds of thousands of paths, which is far more
+    than any report should inline, so callers take a window. ``index`` on each
+    path is its real position on the page, not its position in the window.
+    """
     try:
         paths = page.get_drawings()
     except Exception as exc:
-        return [{"error": f"vector graphics unavailable: {exc}"}]
+        return {
+            "items": [{"error": f"vector graphics unavailable: {exc}"}],
+            "total": None,
+            "offset": 0,
+            "limit": limit,
+            "truncated": False,
+        }
 
-    result: list[dict[str, Any]] = []
-    for index, path in enumerate(paths):
+    total = len(paths)
+    start = max(0, int(offset))
+    end = total if limit is None else min(total, start + max(0, int(limit)))
+    window = paths[start:end]
+
+    items: list[dict[str, Any]] = []
+    for position, path in enumerate(window, start=start):
         path_type = path.get("type", "")
-        result.append(
+        items.append(
             {
-                "index": index,
+                "index": position,
                 "seqno": path.get("seqno"),
                 "type": path_type,
                 "type_label": PATH_TYPES.get(path_type, path_type),
@@ -108,4 +129,15 @@ def extract_drawings(page: pymupdf.Page) -> list[dict[str, Any]]:
                 "items": [_convert_item(item) for item in path.get("items", [])],
             }
         )
-    return result
+    return {
+        "items": items,
+        "total": total,
+        "offset": start,
+        "limit": limit,
+        "truncated": end < total,
+    }
+
+
+def extract_drawings(page: pymupdf.Page, *, limit: int | None = None) -> list[dict[str, Any]]:
+    """Every vector path on the page, or the first ``limit`` of them."""
+    return extract_drawings_range(page, limit=limit)["items"]

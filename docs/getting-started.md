@@ -40,10 +40,24 @@ For development, install the test and lint tools as well:
 Everything is pinned to exact versions, PyMuPDF included, so two checkouts of
 the same commit behave identically.
 
+### Or use Docker
+
+If you would rather not install Python at all:
+
+```bash
+docker build --load -t pdf-scope .
+docker run --rm -p 127.0.0.1:8000:8000 pdf-scope
+```
+
+Open <http://127.0.0.1:8000> and skip to
+[Your first document](#your-first-document). Publish the port on `127.0.0.1`
+only — the tool has no authentication. Volumes, environment variables and the
+rest: [configuration.md](configuration.md#running-with-docker).
+
 ## Run
 
 ```bash
-.venv/bin/python -m pdf_decompiler
+.venv/bin/python -m pdf_scope
 ```
 
 Open <http://127.0.0.1:8000>.
@@ -95,7 +109,7 @@ the top bar does the same for every open document at once, one folder each.
 The extraction core is a normal Python package with no web dependency:
 
 ```python
-from pdf_decompiler.core import analyze_document, analyze_page, dumps
+from pdf_scope.core import analyze_document, analyze_page, dumps
 
 report = analyze_document("invoice.pdf")
 print(report["file"]["pdf_version"], report["file"]["page_count"])

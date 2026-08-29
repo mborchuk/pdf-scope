@@ -7,7 +7,7 @@ FastAPI's async endpoints combine directly with a ``ProcessPoolExecutor``
 box, and it needs no extra machinery beyond uvicorn.
 
 This module contains no PDF logic: every PDF operation is a call into
-``pdf_decompiler.core`` executed in a worker process.
+``pdf_scope.core`` executed in a worker process.
 """
 
 from __future__ import annotations
@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import io
 import json
+import mimetypes
 import os
 import zipfile
 from contextlib import asynccontextmanager
@@ -33,6 +34,9 @@ from ..core.errors import (
     PageNotFoundError,
     PasswordRequiredError,
 )
+from ..core.schema import CONTENT_STREAM_OPERATOR_LIMIT, PAGE_DRAWING_LIMIT
+from ..core.summary import COUNT_FIELDS
+from ..core.tables import TABLE_DETECTION_PATH_GUARD
 from . import tasks
 from .jobs import ExtractionPool
 from .registry import DocumentRecord, DocumentRegistry
@@ -40,11 +44,11 @@ from .registry import DocumentRecord, DocumentRegistry
 STATIC_DIR = Path(__file__).parent / "static"
 
 #: Uploads larger than this are rejected outright (local tool, sane ceiling).
-MAX_UPLOAD_BYTES = int(os.environ.get("PDF_DECOMPILER_MAX_UPLOAD_MB", "512")) * 1024 * 1024
+MAX_UPLOAD_BYTES = int(os.environ.get("PDF_SCOPE_MAX_UPLOAD_MB", "512")) * 1024 * 1024
 
 
 def workspace_dir() -> Path:
-    configured = os.environ.get("PDF_DECOMPILER_WORKSPACE")
+    configured = os.environ.get("PDF_SCOPE_WORKSPACE")
     if configured:
         return Path(configured).expanduser().resolve()
     return Path.cwd() / ".workspace"
@@ -65,7 +69,7 @@ async def lifespan(app: FastAPI):
         pool.shutdown()
 
 
-app = FastAPI(title="PDF decompiler", version=SCHEMA_VERSION, lifespan=lifespan)
+app = FastAPI(title="PDF Scope", version=SCHEMA_VERSION, lifespan=lifespan)
 
 
 # --------------------------------------------------------------------------- #
@@ -244,6 +248,77 @@ async def close_document(document_id: str) -> Response:
     return _json({"closed": document_id})
 
 
+@app.get("/api/documents/{document_id}/summary")
+async def get_content_summary(
+    document_id: str,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(25, ge=1, le=200),
+    include_tables: bool = Query(True),
+) -> Response:
+    """Content counts: text, images, vector paths, tables, annotations, fields.
+
+    Counting means touching every page, and one CAD sheet can take seconds, so a
+    request counts one range and the results are cached per page for the life of
+    the document. ``totals`` and ``pages`` always cover everything counted so far,
+    so a caller walks ranges until ``pages_counted`` reaches ``page_count``.
+    """
+    record = _require_ready(document_id)
+    cached = record.summary_pages
+    wanted = range(offset, min(offset + limit, record.report["file"]["page_count"]))
+    missing = [number for number in wanted if number not in cached]
+
+    if missing:
+        try:
+            window = await pool.run(
+                tasks.task_content_summary,
+                str(record.source_path),
+                missing[0],
+                missing[-1] - missing[0] + 1,
+                include_tables,
+                record.password,
+            )
+        except PageNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=422, detail=f"content summary failed: {exc}") from exc
+        for entry in window["pages"]:
+            cached[entry["page_number"]] = entry
+        guard = window["table_detection_path_guard"]
+    else:
+        guard = TABLE_DETECTION_PATH_GUARD
+
+    # Everything counted so far, not just this window: a caller walking the
+    # document in chunks then always holds the whole picture.
+    pages = [cached[number] for number in sorted(cached)]
+    totals = dict.fromkeys(COUNT_FIELDS, 0)
+    partial: set[str] = set()
+    for entry in cached.values():
+        for field in COUNT_FIELDS:
+            value = entry.get(field)
+            if value is None:
+                partial.add(field)
+            else:
+                totals[field] += value
+
+    page_count = record.report["file"]["page_count"]
+    return _json(
+        {
+            "page_count": page_count,
+            "offset": offset,
+            "limit": limit,
+            "pages_counted": len(cached),
+            "complete": len(cached) >= page_count,
+            "pages_without_text_layer": sum(
+                1 for entry in cached.values() if entry.get("has_text_layer") is False
+            ),
+            "totals": totals,
+            "partial_totals": sorted(partial),
+            "table_detection_path_guard": guard,
+            "pages": pages,
+        }
+    )
+
+
 @app.get("/api/documents/{document_id}/report.json")
 async def download_document_report(document_id: str) -> Response:
     record = _require_ready(document_id)
@@ -318,6 +393,64 @@ async def render_page(
             "Cache-Control": "no-store",
         },
     )
+
+
+@app.get("/api/documents/{document_id}/pages/{page_number}/drawings")
+async def get_page_drawings(
+    document_id: str,
+    page_number: int,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(PAGE_DRAWING_LIMIT, ge=1, le=PAGE_DRAWING_LIMIT),
+) -> Response:
+    """A window of a page's vector paths, with the page's real total.
+
+    The page report inlines only the first window: a CAD sheet can hold hundreds
+    of thousands of paths. This is how the rest is reached.
+    """
+    record = _require_ready(document_id)
+    try:
+        window = await pool.run(
+            tasks.task_page_drawings,
+            str(record.source_path),
+            page_number,
+            offset,
+            limit,
+            record.password,
+        )
+    except PageNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"drawings unavailable: {exc}") from exc
+    return _json(window)
+
+
+@app.get("/api/documents/{document_id}/pages/{page_number}/operators")
+async def get_page_operators(
+    document_id: str,
+    page_number: int,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(2_000, ge=1, le=CONTENT_STREAM_OPERATOR_LIMIT),
+) -> Response:
+    """A window of a page's content-stream operators, with the exact total.
+
+    The whole stream is lexed to count operators, so the total is exact; only the
+    requested window is materialised.
+    """
+    record = _require_ready(document_id)
+    try:
+        window = await pool.run(
+            tasks.task_page_operators,
+            str(record.source_path),
+            page_number,
+            offset,
+            limit,
+            record.password,
+        )
+    except PageNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"operators unavailable: {exc}") from exc
+    return _json(window)
 
 
 @app.get("/api/documents/{document_id}/pages/{page_number}/text")
@@ -600,7 +733,7 @@ async def download_all_bundles() -> Response:
     return Response(
         content=buffer.getvalue(),
         media_type="application/zip",
-        headers={"Content-Disposition": 'attachment; filename="pdf-decompiler-export.zip"'},
+        headers={"Content-Disposition": 'attachment; filename="pdf-scope-export.zip"'},
     )
 
 
@@ -626,5 +759,12 @@ async def status() -> Response:
 async def index() -> HTMLResponse:
     return HTMLResponse((STATIC_DIR / "index.html").read_text("utf-8"))
 
+
+# Python's mimetypes only learns the webfont types from the platform's mime
+# database, which a slim container image does not have: the vendored .woff2 files
+# would then be served as text/plain. Register them so the UI is served correctly
+# whatever the interpreter and image.
+mimetypes.add_type("font/woff2", ".woff2")
+mimetypes.add_type("font/woff", ".woff")
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")

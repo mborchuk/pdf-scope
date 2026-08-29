@@ -1,4 +1,4 @@
-# PDF decompiler documentation
+# PDF Scope documentation
 
 Everything about the project, in reading order. Start at
 [Getting started](getting-started.md) if you just want it running.
@@ -13,7 +13,7 @@ Everything about the project, in reading order. Start at
 | [User interface guide](ui-guide.md) | Every panel, every overlay, every view/copy/download action |
 | [HTTP API reference](api.md) | All endpoints with parameters, status codes, headers and examples |
 | [Extraction schema reference](schema.md) | Every field of the document and page reports, field by field |
-| [Core Python API](core-api.md) | Using `pdf_decompiler.core` without the web layer |
+| [Core Python API](core-api.md) | Using `pdf_scope.core` without the web layer |
 | [Coverage: what is and is not extracted](coverage.md) | Mapping to PDF features, and everything PyMuPDF cannot reach |
 | [Multi-document behaviour](multi-document.md) | Identity, isolation, concurrency, lifecycle, artifact layout |
 | [Configuration and operations](configuration.md) | Environment variables, limits, performance, resource use, running behind a proxy |
@@ -30,6 +30,7 @@ Everything about the project, in reading order. Start at
 | [SECURITY](../SECURITY.md) | Threat model, safe operation, reporting |
 | [NOTICE](../NOTICE.md) | Third-party licences, including PyMuPDF's AGPL terms |
 | [CODE_OF_CONDUCT](../CODE_OF_CONDUCT.md) | Behaviour expected in project spaces |
+| [Dockerfile](../Dockerfile) | Container image; usage in [configuration.md](configuration.md#running-with-docker) |
 
 ## Conventions used throughout
 
@@ -48,5 +49,5 @@ Everything about the project, in reading order. Start at
 
 ## Version
 
-This documentation describes **PDF decompiler 0.1.0**, extraction schema
+This documentation describes **PDF Scope 0.1.0**, extraction schema
 version **1.0**, pinned to **PyMuPDF 1.28.2** (MuPDF 1.28.2).

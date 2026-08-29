@@ -6,8 +6,8 @@ import zipfile
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
-from pdf_decompiler.core import build_document_bundle, document_text
-from pdf_decompiler.web.tasks import task_analyze_document, task_analyze_page
+from pdf_scope.core import build_document_bundle, document_text
+from pdf_scope.web.tasks import task_analyze_document, task_analyze_page
 
 
 def test_two_documents_analysed_concurrently(rich_pdf: Path, second_pdf: Path) -> None:
@@ -44,7 +44,7 @@ def test_concurrent_page_extraction_keeps_artifacts_namespaced(
 
     assert page_a["document_id"] == "doc-a"
     assert page_b["document_id"] == "doc-b"
-    assert "Hello decompiler" in page_a["text"]["plain"]
+    assert "Hello pdf scope" in page_a["text"]["plain"]
     assert "UNIQUE-SECOND-DOCUMENT" in page_b["text"]["plain"]
     assert "UNIQUE-SECOND-DOCUMENT" not in page_a["text"]["plain"]
 
@@ -76,12 +76,12 @@ def test_bundle_contains_every_part(rich_pdf: Path, tmp_path: Path) -> None:
         assert "text/document.md" in names
         assert "content-streams/page-0001.txt" in names
         assert any(name.startswith("images/") for name in names)
-        assert "Hello decompiler" in archive.read("text/document.txt").decode()
+        assert "Hello pdf scope" in archive.read("text/document.txt").decode()
 
 
 def test_document_text_formats(rich_pdf: Path) -> None:
     plain = document_text(rich_pdf)
     markdown = document_text(rich_pdf, fmt="md", title="rich.pdf")
-    assert "Hello decompiler" in plain
+    assert "Hello pdf scope" in plain
     assert markdown.startswith("# rich.pdf")
     assert "## Page 1" in markdown and "## Page 2" in markdown

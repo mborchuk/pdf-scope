@@ -11,7 +11,7 @@
 # ----------------------------------------------------------------- build stage
 # Wheels are resolved and installed here so the final image carries no build
 # tooling, no pip cache and no compiler.
-FROM python:3.13-slim AS build
+FROM python:3.14-slim AS build
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1
@@ -30,7 +30,7 @@ COPY pdf_scope ./pdf_scope
 RUN /opt/venv/bin/pip install --no-cache-dir --no-deps .
 
 # ---------------------------------------------------------------- runtime stage
-FROM python:3.13-slim AS runtime
+FROM python:3.14-slim AS runtime
 
 LABEL org.opencontainers.image.title="PDF Scope" \
       org.opencontainers.image.description="Inspect the structure and contents of PDF files in a local web UI." \

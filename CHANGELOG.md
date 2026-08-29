@@ -11,6 +11,14 @@ from the application: see [docs/schema.md](docs/schema.md#versioning).
 
 ### Added
 
+- The details panel now shows an element's **text** and a **preview** for every
+  kind, not just for images: a text block's or line's text is recomposed from the
+  spans inside it, an annotation shows its `/Contents`, a field its value, a link
+  its target — and anything with a bounding box gets a render of the page clipped
+  to that box. Per-kind fields were extended (block: lines, spans, fonts, sizes;
+  line: direction and write mode; character: code point and origin; annotation:
+  author, dates, opacity, blend mode, colours; link: kind and target; field: name,
+  type, value, choices), and element labels now carry a text snippet.
 - **Overview tab**, now the first tab and where a freshly opened document lands:
   what the file is (size, PDF version, pages, page sizes, SHA-256), who made it
   (producer, creator, dates, title, author), what is inside it (characters, words,

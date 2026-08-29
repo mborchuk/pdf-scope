@@ -197,19 +197,44 @@ character count, and counts of images, drawings, annotations, links and form
 fields. A page with no text layer says so here. Scrolling to another page
 replaces the summary with that page's, which also clears the selection.
 
-With an element selected it shows what is relevant to that kind:
+With an element selected the panel always shows three things where they exist —
+**a preview**, **its text**, and **its own fields** — followed by the raw JSON.
+
+**Preview.** Images show their own pixels. Every other kind shows the rendered
+page clipped to the element's box, with a little padding so a thin line or a
+single character is recognisable in context; that render is the only picture of a
+path, an annotation or a form field that exists. Clicking any preview opens the
+scalable viewer.
+
+**Text.** Only spans carry text in the extraction. A block's or a line's text is
+therefore recomposed from the spans inside it — spans as written, one line per
+line — and the panel says so, so nobody mistakes it for a stored string. Other
+kinds borrow what reads as their text: an annotation's `/Contents`, a form field's
+value, a link's URI. **Copy text** is offered whenever there is text.
+
+**Fields per kind:**
 
 | Kind | Extra fields |
 | --- | --- |
+| Text block | lines, spans, the fonts and sizes used inside it |
+| Line | spans, fonts, writing direction, write mode (horizontal or vertical) |
 | Span | font, size, colour, active font flags |
-| Image | xref, stored pixel size, DPI, colourspace, bits per component, transparency mask, placement matrix, stored format, plus a thumbnail |
-| Drawing | type, stroke and fill colours, width, dashes, number of path items |
-| Annotation / widget | xref |
+| Character | the character, its Unicode code point, its origin, whether the glyph is synthetic |
+| Image | xref, stored pixel size, DPI, colourspace, bits per component, transparency mask, placement matrix, stored format |
+| Table | rows × columns, where the header is, header cell text, cell count, and the table as Markdown |
+| Drawing | type, stroke and fill colours, line width, dashes, fill rule, optional-content layer, number of path items |
+| Annotation | xref, type and type number, author, modification date, subject, opacity, blend mode, colours, whether it has a popup |
+| Link | link kind, target URI or target page, xref |
+| Form field | xref, field name, field type, current value, choices, font, whether it is signed |
 
-Buttons on the panel: **Copy element JSON**, **Copy text** (text elements),
-**Download image** and **Copy image** (images), **Open xref N** (jumps to the
-object browser). A collapsible **Raw JSON** section holds the element exactly
-as the API returned it.
+Buttons: **Copy element JSON**, **Copy text**, **Copy table as Markdown**
+(tables), **Download image** and **Copy image** (images), **Open xref N** (jumps
+to the object browser). A collapsible **Raw JSON** section holds the element
+exactly as the API returned it.
+
+Element labels carry a snippet of their text — *Text block 14 — FÖRKLARINGAR
+Ytskikt G = Golv…* — which is what makes overlay tooltips and the stacked-element
+chooser readable.
 
 When the selected element is an image and the page holds more than one, the
 panel also shows **Images on this page**: a strip of small previews, current one

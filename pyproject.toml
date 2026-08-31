@@ -36,7 +36,7 @@ Issues = "https://github.com/mborchuk/pdf-scope/issues"
 pdf-scope = "pdf_scope.__main__:main"
 
 [project.optional-dependencies]
-dev = ["pytest==9.1.1", "ruff==0.14.4"]
+dev = ["pytest==9.1.1", "ruff==0.16.5"]
 
 [build-system]
 requires = ["setuptools>=68"]

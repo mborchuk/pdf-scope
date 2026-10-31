@@ -11,6 +11,7 @@ page is the technical companion.
 - [Tests](#tests)
 - [Writing fixtures](#writing-fixtures)
 - [Common tasks](#common-tasks)
+- [Why the pin is still 1.28.2](#why-the-pin-is-still-1282)
 - [Verifying against PyMuPDF](#verifying-against-pymupdf)
 - [Debugging](#debugging)
 - [Continuous integration](#continuous-integration)
@@ -167,6 +168,64 @@ version strings in `README.md`, `NOTICE.md` and `docs/`, then run the tests.
 Expect text block segmentation, image DPI reporting or drawing decomposition to
 shift slightly between MuPDF releases; if a test fails, decide whether the new
 behaviour is correct before changing the assertion.
+
+## Why the pin is still 1.28.2
+
+PyMuPDF **2.0** (released 2026-10-19, bundling MuPDF 1.28.5) was evaluated on
+2026-10-31 and **deliberately not adopted**. It is not a compatibility problem:
+the whole test suite and the server smoke test pass on it unchanged, and no API
+this project uses was removed or altered. It is a packaging problem.
+
+What 2.0 changes:
+
+| | 1.28.2 (pinned) | 2.0 |
+| --- | --- | --- |
+| Hard dependencies | none | `networkx`, `numpy`, `onnxruntime`, `protobuf`, `psutil`, `pyyaml`, `tabulate`, `pymupdf4llm` |
+| Installed size (`site-packages`) | 105 MB | 294 MB |
+| `import pymupdf` | 0.27 s | 0.92 s — paid once per pool worker process |
+| Minimum Python | 3.10 | 3.11 |
+| Platform wheels | 8 | 4 — no macOS x86-64, musllinux/Alpine, win32, win-arm64, free-threaded or wasm |
+
+The weight comes from the layout engine now shipping inside the wheel:
+`pymupdf/layout/` is 50 MB of ONNX models, which is what pulls in
+`onnxruntime`. (`pymupdf-layout==2.0` itself is an empty shim that works around
+a pip upgrade bug.) None of it is used here — this project does no layout
+analysis, table detection or Markdown conversion.
+
+Two output differences were measured by diffing a full extraction of the same
+fixture under both versions. Nothing else moved — text, bounding boxes,
+operators, images, drawings, structure and metadata are byte-identical:
+
+- span `ascender` / `descender` return MuPDF's fallback values (`0.8` /
+  `-0.2`) instead of the real font metrics (`1.075` / `-0.299` for Helvetica).
+  `TEXT_ACCURATE_ASCENDERS` does not restore them. Span bounding boxes are
+  unchanged, so overlays and geometry are unaffected; only those two reported
+  fields lose precision;
+- an annotation's `language` is now `null` where 1.28.2 reported a spurious
+  `"zh-Hans"` — an upstream fix.
+
+Also worth knowing: `onnxruntime` has no wheels for Python 3.15 yet, so
+PyMuPDF 2.0 cannot be installed there at all even though it advertises
+3.11–3.15 support.
+
+**Revisit the pin when either** a MuPDF security or correctness fix lands that
+affects the parsing paths this project uses — 1.28.2 is the last 1.x release,
+so fixes now ship only in 2.x — **or** Artifex makes the layout stack an
+optional extra (`pymupdf[layout]`) so the base install is slim again.
+
+When that happens, the upgrade is mechanical: pin `pymupdf==2.x`, raise
+`requires-python` to `>=3.11`, drop `"3.10"` from the CI test matrix, refresh
+the version strings in `README.md`, `NOTICE.md` and `docs/`, note the
+`ascender`/`descender` change in `docs/schema.md`, and rebuild the container
+image (it grows by roughly 190 MB).
+
+Reproduce the measurement in a throwaway environment rather than the project
+venv:
+
+```bash
+python3 -m venv /tmp/pymupdf2 && /tmp/pymupdf2/bin/pip install "pymupdf==2.0" -r requirements-dev.txt
+/tmp/pymupdf2/bin/python -m pytest -q
+```
 
 ## Verifying against PyMuPDF
 

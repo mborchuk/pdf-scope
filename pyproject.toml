@@ -52,6 +52,13 @@ include = ["pdf_scope*"]
 line-length = 100
 target-version = "py310"
 
+[tool.ruff.format]
+# Ruff 0.16 began formatting Python code blocks inside Markdown. The examples
+# under docs/ align trailing comments into columns on purpose, which the
+# formatter collapses, so Markdown is left to the author. Python files are
+# still formatted and every file is still linted.
+exclude = ["*.md"]
+
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "C4", "SIM"]
 ignore = ["B008"]

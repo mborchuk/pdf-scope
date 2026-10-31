@@ -9,6 +9,16 @@ from the application: see [docs/schema.md](docs/schema.md#versioning).
 
 ## [Unreleased]
 
+### Unchanged on purpose
+
+- **PyMuPDF stays pinned at 1.28.2.** Version 2.0 was evaluated on 2026-10-31:
+  the test suite and the smoke test pass on it and no API used here changed,
+  but it adds eight hard dependencies (including `onnxruntime`), nearly triples
+  the installed size, raises the minimum Python to 3.11 and halves the platform
+  wheel coverage — all for a layout engine this project does not use. The
+  measurements and the conditions for revisiting are in
+  [docs/development.md](docs/development.md#why-the-pin-is-still-1282).
+
 ### Added
 
 - **`Dockerfile`** and `.dockerignore`: a two-stage `python:3.13-slim` image

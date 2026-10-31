@@ -285,3 +285,8 @@ quieten it, run uvicorn directly with `--log-level warning`.
 Changing the PyMuPDF pin is a deliberate act: extraction output can shift
 between MuPDF versions (text block segmentation and image DPI reporting are the
 usual candidates). Run the test suite after any such change.
+
+PyMuPDF is held at 1.28.2 on purpose; 2.0 was evaluated and declined because it
+pulls in an ONNX layout stack this project does not use. The measurements and
+the conditions for revisiting are in
+[development.md](development.md#why-the-pin-is-still-1282).
